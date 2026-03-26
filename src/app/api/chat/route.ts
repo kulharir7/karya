@@ -10,6 +10,7 @@ import {
   renameSession,
 } from "@/lib/session-manager";
 import { eventBus } from "@/lib/event-bus";
+import { getWorkspaceContext, initWorkspace, logToDaily } from "@/lib/memory-engine";
 
 // Cache MCP tools for 60 seconds
 let mcpToolsCache: { tools: Record<string, any>; timestamp: number } = { tools: {}, timestamp: 0 };
@@ -36,39 +37,28 @@ async function getCachedMCPToolsets(): Promise<Record<string, any>> {
 
 // Map Mastra variable names → tool IDs for display
 const TOOL_NAME_MAP: Record<string, string> = {
-  navigateTool: "browser-navigate",
-  actTool: "browser-act",
-  extractTool: "browser-extract",
-  screenshotTool: "browser-screenshot",
-  webSearchTool: "web-search",
-  readFileTool: "file-read",
-  writeFileTool: "file-write",
-  listFilesTool: "file-list",
-  moveFileTool: "file-move",
-  searchFilesTool: "file-search",
-  readPdfTool: "file-read-pdf",
-  resizeImageTool: "file-resize-image",
-  zipFilesTool: "file-zip",
-  unzipFilesTool: "file-unzip",
-  executeCommandTool: "shell-execute",
-  systemInfoTool: "system-info",
-  clipboardReadTool: "clipboard-read",
-  clipboardWriteTool: "clipboard-write",
-  notifyTool: "system-notify",
-  browserAgentTool: "browser-agent",
-  batchRenameTool: "file-batch-rename",
-  fileSizeTool: "file-size-info",
-  dateTimeTool: "system-datetime",
-  processListTool: "system-processes",
-  openAppTool: "system-open-app",
-  killProcessTool: "system-kill-process",
-  codeWriteTool: "code-write",
-  codeExecuteTool: "code-execute",
-  codeAnalyzeTool: "code-analyze",
-  apiCallTool: "api-call",
-  csvParseTool: "data-csv-parse",
-  jsonQueryTool: "data-json-query",
+  navigateTool: "browser-navigate", actTool: "browser-act",
+  extractTool: "browser-extract", screenshotTool: "browser-screenshot",
+  webSearchTool: "web-search", readFileTool: "file-read",
+  writeFileTool: "file-write", listFilesTool: "file-list",
+  moveFileTool: "file-move", searchFilesTool: "file-search",
+  readPdfTool: "file-read-pdf", resizeImageTool: "file-resize-image",
+  zipFilesTool: "file-zip", unzipFilesTool: "file-unzip",
+  executeCommandTool: "shell-execute", systemInfoTool: "system-info",
+  clipboardReadTool: "clipboard-read", clipboardWriteTool: "clipboard-write",
+  notifyTool: "system-notify", browserAgentTool: "browser-agent",
+  batchRenameTool: "file-batch-rename", fileSizeTool: "file-size-info",
+  dateTimeTool: "system-datetime", processListTool: "system-processes",
+  openAppTool: "system-open-app", killProcessTool: "system-kill-process",
+  codeWriteTool: "code-write", codeExecuteTool: "code-execute",
+  codeAnalyzeTool: "code-analyze", apiCallTool: "api-call",
+  csvParseTool: "data-csv-parse", jsonQueryTool: "data-json-query",
   dataTransformTool: "data-transform",
+  memorySearchTool: "memory-search",
+  memoryReadTool: "memory-read",
+  memoryWriteTool: "memory-write",
+  memoryLogTool: "memory-log",
+  memoryListTool: "memory-list",
 };
 
 function resolveToolName(raw: string): string {
@@ -81,38 +71,47 @@ export async function POST(req: NextRequest) {
 
     if (!message) {
       return new Response(JSON.stringify({ error: "Message is required" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
+        status: 400, headers: { "Content-Type": "application/json" },
       });
     }
 
     // Resolve session — server-side
     let sessionId = reqSessionId || "default";
     await ensureDefaultSession();
-    
+
     let session = await getSession(sessionId);
     if (!session) {
-      // Create session if it doesn't exist
       session = await createSession("New Chat");
       sessionId = session.id;
     }
 
     // Persist user message to DB
-    await addMessage(sessionId, {
-      role: "user",
-      content: message,
-      timestamp: Date.now(),
-    });
-
-    // Emit lifecycle events
+    await addMessage(sessionId, { role: "user", content: message, timestamp: Date.now() });
     await eventBus.emit("message:received", { sessionId, message, timestamp: Date.now() });
+
+    // Initialize workspace and get memory context
+    initWorkspace();
+    const workspaceContext = getWorkspaceContext();
 
     // Load recent messages from DB for context
     const recentMessages = await getRecentMessages(sessionId, 20);
-    const contextMessages: any[] = recentMessages.map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    }));
+    const contextMessages: any[] = [];
+
+    // Inject workspace context as system message (like OpenClaw bootstrap)
+    if (workspaceContext) {
+      contextMessages.push({
+        role: "system",
+        content: `## Workspace Memory\n${workspaceContext}`,
+      });
+    }
+
+    // Add chat history
+    contextMessages.push(
+      ...recentMessages.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }))
+    );
 
     // Auto-rename session from first user message
     if (session.messageCount <= 1) {
@@ -126,9 +125,6 @@ export async function POST(req: NextRequest) {
     // Fetch MCP toolsets
     const mcpToolsets = await getCachedMCPToolsets();
     const mcpToolCount = Object.keys(mcpToolsets).length;
-    if (mcpToolCount > 0) {
-      console.log(`[Chat] Injecting ${mcpToolCount} MCP tools into session ${sessionId}`);
-    }
 
     const readable = new ReadableStream({
       async start(controller) {
@@ -136,84 +132,88 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
-        // Send session ID back to client (for new sessions)
         send({ type: "session", sessionId });
         await eventBus.emit("agent:start", { sessionId, message });
 
         try {
-          const generateOptions: any = {};
+          const streamOptions: any = {};
           if (mcpToolCount > 0) {
-            generateOptions.toolsets = mcpToolsets;
+            streamOptions.toolsets = mcpToolsets;
           }
 
-          const result = await agent.generate(contextMessages, generateOptions);
-          const resultObj = result as any;
+          // === TRUE STREAMING via agent.stream() ===
+          const streamResult = await agent.stream(contextMessages, streamOptions);
 
-          // Collect tool calls for persistence
+          let fullText = "";
           const allToolCalls: { toolName: string; args?: any; result?: any; status: string }[] = [];
 
-          // Extract and emit tool calls from steps
-          const steps = resultObj?.steps || [];
-          for (const step of steps) {
-            const toolCalls = step?.toolCalls || [];
-            const toolResults = step?.toolResults || [];
+          // Stream text token-by-token via textStream
+          const textStream = await streamResult.textStream;
+          for await (const chunk of textStream) {
+            if (chunk) {
+              fullText += chunk;
+              send({ type: "text-delta", content: chunk });
+            }
+          }
 
-            for (let i = 0; i < toolCalls.length; i++) {
-              const tc = toolCalls[i];
-              const tr = toolResults[i];
-              const tcPayload = tc?.payload || tc;
-              const trPayload = tr?.payload || tr;
-              const rawName = tcPayload?.toolName || tcPayload?.name || tc?.toolName || "unknown";
-              const toolName = resolveToolName(rawName);
+          // After stream ends, get tool calls from steps
+          const steps = await streamResult.steps;
+          if (steps && Array.isArray(steps)) {
+            for (const step of steps) {
+              const toolCalls = step?.toolCalls || [];
+              const toolResults = step?.toolResults || [];
 
-              await eventBus.emit("tool:before_call", { toolName, args: tcPayload?.args || {} });
-              send({ type: "tool-call", toolName, args: tcPayload?.args || {} });
+              for (let i = 0; i < toolCalls.length; i++) {
+                const tc = toolCalls[i];
+                const tr = toolResults[i];
+                const tcPayload = tc?.payload || tc;
+                const trPayload = tr?.payload || tr;
+                const rawName = (tcPayload as any)?.toolName || (tcPayload as any)?.name || (tc as any)?.toolName || "unknown";
+                const toolName = resolveToolName(rawName);
+                const toolResult = trPayload?.result || null;
 
-              const toolResult = trPayload?.result || null;
-              if (tr) {
-                send({ type: "tool-result", toolName, result: toolResult });
-                await eventBus.emit("tool:after_call", { toolName, result: toolResult });
+                await eventBus.emit("tool:before_call", { toolName, args: tcPayload?.args || {} });
+                send({ type: "tool-call", toolName, args: tcPayload?.args || {} });
+
+                if (tr) {
+                  send({ type: "tool-result", toolName, result: toolResult });
+                  await eventBus.emit("tool:after_call", { toolName, result: toolResult });
+                }
+
+                allToolCalls.push({
+                  toolName, args: tcPayload?.args || {},
+                  result: toolResult, status: tr ? "done" : "error",
+                });
               }
-
-              allToolCalls.push({
-                toolName,
-                args: tcPayload?.args || {},
-                result: toolResult,
-                status: tr ? "done" : "error",
-              });
             }
           }
 
-          // Fallback: direct toolResults
-          const directToolResults = resultObj?.toolResults || [];
-          if (Array.isArray(directToolResults) && steps.length === 0) {
-            for (const tr of directToolResults) {
-              const toolName = tr?.toolName || "unknown";
-              send({ type: "tool-call", toolName, args: tr?.args || {} });
-              send({ type: "tool-result", toolName, result: tr?.result || null });
-              allToolCalls.push({
-                toolName, args: tr?.args || {},
-                result: tr?.result || null, status: "done",
-              });
-            }
+          // Get final text if textStream was empty (fallback)
+          if (!fullText) {
+            try {
+              fullText = await streamResult.text || "";
+              if (fullText) {
+                send({ type: "text-delta", content: fullText });
+              }
+            } catch {}
           }
 
-          // Send text
-          const text = result.text || "";
-          if (text) {
-            send({ type: "text", content: text });
-          }
-
-          // Persist assistant message to DB
+          // Persist assistant message
           await addMessage(sessionId, {
             role: "assistant",
-            content: text || "✅ Done.",
+            content: fullText || "✅ Done.",
             toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
             timestamp: Date.now(),
           });
 
-          await eventBus.emit("agent:end", { sessionId, toolCount: allToolCalls.length, textLength: text.length });
-          await eventBus.emit("message:sent", { sessionId, content: text });
+          // Log to daily memory
+          if (allToolCalls.length > 0) {
+            const toolNames = allToolCalls.map((t) => t.toolName).join(", ");
+            logToDaily(`Used tools: ${toolNames} | Session: ${sessionId}`);
+          }
+
+          await eventBus.emit("agent:end", { sessionId, toolCount: allToolCalls.length, textLength: fullText.length });
+          await eventBus.emit("message:sent", { sessionId, content: fullText });
 
           send({ type: "done" });
           controller.close();
@@ -221,7 +221,6 @@ export async function POST(req: NextRequest) {
           console.error("Agent error:", err.message);
           await eventBus.emit("agent:error", { sessionId, error: err.message });
 
-          // Persist error message
           await addMessage(sessionId, {
             role: "assistant",
             content: `❌ Error: ${err.message}`,

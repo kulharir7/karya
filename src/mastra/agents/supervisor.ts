@@ -15,6 +15,9 @@ import {
 } from "../tools/system";
 import { codeWriteTool, codeExecuteTool, codeAnalyzeTool } from "../tools/code";
 import { apiCallTool, csvParseTool, jsonQueryTool, dataTransformTool } from "../tools/data";
+import {
+  memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
+} from "../tools/memory";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -69,6 +72,13 @@ For every task, think step by step:
 - data-csv-parse: Parse CSV files into structured data
 - data-json-query: Read JSON files with dot-notation queries
 - data-transform: Transform data between formats using JavaScript
+
+### 🧠 MEMORY (persistent knowledge)
+- memory-search: Search across all memory files
+- memory-read: Read a specific memory file
+- memory-write: Write/update a memory file
+- memory-log: Append to today's daily log (auto-timestamped)
+- memory-list: List all memory files
 
 ### 🖥️ SYSTEM
 - system-info: OS/CPU/RAM
@@ -133,5 +143,7 @@ Example: "Download all images from this website and resize them"
     // System
     systemInfoTool, clipboardReadTool, clipboardWriteTool, notifyTool,
     dateTimeTool, processListTool, openAppTool, killProcessTool,
+    // Memory
+    memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
   },
 });

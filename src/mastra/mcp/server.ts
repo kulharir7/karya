@@ -33,6 +33,11 @@ import { codeWriteTool, codeExecuteTool, codeAnalyzeTool } from "../tools/code";
 // Data tools
 import { apiCallTool, csvParseTool, jsonQueryTool, dataTransformTool } from "../tools/data";
 
+// Memory tools
+import {
+  memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
+} from "../tools/memory";
+
 /**
  * Karya MCP Server — exposes ALL 32 tools to external MCP clients.
  * 
@@ -96,6 +101,13 @@ export function createKaryaMCPServer() {
       csvParseTool,
       jsonQueryTool,
       dataTransformTool,
+
+      // === Memory (5) ===
+      memorySearchTool,
+      memoryReadTool,
+      memoryWriteTool,
+      memoryLogTool,
+      memoryListTool,
     },
   });
 }

@@ -196,7 +196,7 @@ export default function Home() {
           if (!line.startsWith("data: ")) continue;
           try {
             const d = JSON.parse(line.slice(6).trim());
-            if (d.type === "text") { fullText += d.content; setStreamingText(fullText); }
+            if (d.type === "text-delta" || d.type === "text") { fullText += d.content; setStreamingText(fullText); }
             else if (d.type === "session") {
               // Server may assign a new session ID
               if (d.sessionId && d.sessionId !== activeId) {
@@ -259,7 +259,7 @@ export default function Home() {
           if (!line.startsWith("data: ")) continue;
           try {
             const d = JSON.parse(line.slice(6).trim());
-            if (d.type === "text") { fullText += d.content; setStreamingText(fullText); }
+            if (d.type === "text-delta" || d.type === "text") { fullText += d.content; setStreamingText(fullText); }
             else if (d.type === "session" && d.sessionId) {
               setActiveId(d.sessionId);
               localStorage.setItem("karya-active-session", d.sessionId);
