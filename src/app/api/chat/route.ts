@@ -1,15 +1,22 @@
 import { NextRequest } from "next/server";
 import "dotenv/config";
 import { getMCPToolsets } from "@/mastra/mcp/client";
+import {
+  addMessage,
+  getRecentMessages,
+  ensureDefaultSession,
+  getSession,
+  createSession,
+  renameSession,
+} from "@/lib/session-manager";
 
-// Cache MCP tools for 60 seconds to avoid re-fetching on every message
+// Cache MCP tools for 60 seconds
 let mcpToolsCache: { tools: Record<string, any>; timestamp: number } = { tools: {}, timestamp: 0 };
 const MCP_CACHE_TTL = 60_000;
 
 async function getAgent() {
   const { mastra } = await import("@/mastra");
-  const agent = mastra.getAgent("karya");
-  return agent;
+  return mastra.getAgent("karya");
 }
 
 async function getCachedMCPToolsets(): Promise<Record<string, any>> {
@@ -22,11 +29,11 @@ async function getCachedMCPToolsets(): Promise<Record<string, any>> {
     mcpToolsCache = { tools: toolsets, timestamp: now };
     return toolsets;
   } catch {
-    return mcpToolsCache.tools; // Return stale cache on error
+    return mcpToolsCache.tools;
   }
 }
 
-// Map Mastra variable names → tool IDs
+// Map Mastra variable names → tool IDs for display
 const TOOL_NAME_MAP: Record<string, string> = {
   navigateTool: "browser-navigate",
   actTool: "browser-act",
@@ -63,18 +70,13 @@ const TOOL_NAME_MAP: Record<string, string> = {
   dataTransformTool: "data-transform",
 };
 
-// Reverse map for MCP: tool ID → variable name
-const TOOL_ID_MAP: Record<string, string> = Object.fromEntries(
-  Object.entries(TOOL_NAME_MAP).map(([k, v]) => [v, k])
-);
-
 function resolveToolName(raw: string): string {
   return TOOL_NAME_MAP[raw] || raw;
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, history = [] } = await req.json();
+    const { message, sessionId: reqSessionId } = await req.json();
 
     if (!message) {
       return new Response(JSON.stringify({ error: "Message is required" }), {
@@ -83,8 +85,46 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Resolve session — server-side
+    let sessionId = reqSessionId || "default";
+    await ensureDefaultSession();
+    
+    let session = await getSession(sessionId);
+    if (!session) {
+      // Create session if it doesn't exist
+      session = await createSession("New Chat");
+      sessionId = session.id;
+    }
+
+    // Persist user message to DB
+    await addMessage(sessionId, {
+      role: "user",
+      content: message,
+      timestamp: Date.now(),
+    });
+
+    // Load recent messages from DB for context
+    const recentMessages = await getRecentMessages(sessionId, 20);
+    const contextMessages: any[] = recentMessages.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+
+    // Auto-rename session from first user message
+    if (session.messageCount <= 1) {
+      const autoName = message.slice(0, 30) + (message.length > 30 ? "..." : "");
+      await renameSession(sessionId, autoName);
+    }
+
     const agent = await getAgent();
     const encoder = new TextEncoder();
+
+    // Fetch MCP toolsets
+    const mcpToolsets = await getCachedMCPToolsets();
+    const mcpToolCount = Object.keys(mcpToolsets).length;
+    if (mcpToolCount > 0) {
+      console.log(`[Chat] Injecting ${mcpToolCount} MCP tools into session ${sessionId}`);
+    }
 
     const readable = new ReadableStream({
       async start(controller) {
@@ -92,27 +132,20 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
+        // Send session ID back to client (for new sessions)
+        send({ type: "session", sessionId });
+
         try {
-          // Fetch MCP toolsets and merge with agent's built-in tools
-          const mcpTools = await getCachedMCPToolsets();
-          const mcpToolCount = Object.keys(mcpTools).length;
-          if (mcpToolCount > 0) {
-            console.log(`[Chat] Injecting ${mcpToolCount} MCP tools`);
-          }
-
-          const messages = [
-            ...history.slice(-10),
-            { role: "user" as const, content: message },
-          ];
-
-          // Generate with merged tools (built-in + MCP)
           const generateOptions: any = {};
           if (mcpToolCount > 0) {
-            generateOptions.toolsets = mcpTools;
+            generateOptions.toolsets = mcpToolsets;
           }
 
-          const result = await agent.generate(messages, generateOptions);
+          const result = await agent.generate(contextMessages, generateOptions);
           const resultObj = result as any;
+
+          // Collect tool calls for persistence
+          const allToolCalls: { toolName: string; args?: any; result?: any; status: string }[] = [];
 
           // Extract and emit tool calls from steps
           const steps = resultObj?.steps || [];
@@ -123,26 +156,24 @@ export async function POST(req: NextRequest) {
             for (let i = 0; i < toolCalls.length; i++) {
               const tc = toolCalls[i];
               const tr = toolResults[i];
-
               const tcPayload = tc?.payload || tc;
               const trPayload = tr?.payload || tr;
-
               const rawName = tcPayload?.toolName || tcPayload?.name || tc?.toolName || "unknown";
               const toolName = resolveToolName(rawName);
 
-              send({
-                type: "tool-call",
+              send({ type: "tool-call", toolName, args: tcPayload?.args || {} });
+
+              const toolResult = trPayload?.result || null;
+              if (tr) {
+                send({ type: "tool-result", toolName, result: toolResult });
+              }
+
+              allToolCalls.push({
                 toolName,
                 args: tcPayload?.args || {},
+                result: toolResult,
+                status: tr ? "done" : "error",
               });
-
-              if (tr) {
-                send({
-                  type: "tool-result",
-                  toolName,
-                  result: trPayload?.result || null,
-                });
-              }
             }
           }
 
@@ -150,28 +181,42 @@ export async function POST(req: NextRequest) {
           const directToolResults = resultObj?.toolResults || [];
           if (Array.isArray(directToolResults) && steps.length === 0) {
             for (const tr of directToolResults) {
-              send({
-                type: "tool-call",
-                toolName: tr?.toolName || "unknown",
-                args: tr?.args || {},
-              });
-              send({
-                type: "tool-result",
-                toolName: tr?.toolName || "unknown",
-                result: tr?.result || null,
+              const toolName = tr?.toolName || "unknown";
+              send({ type: "tool-call", toolName, args: tr?.args || {} });
+              send({ type: "tool-result", toolName, result: tr?.result || null });
+              allToolCalls.push({
+                toolName, args: tr?.args || {},
+                result: tr?.result || null, status: "done",
               });
             }
           }
 
           // Send text
-          if (result.text) {
-            send({ type: "text", content: result.text });
+          const text = result.text || "";
+          if (text) {
+            send({ type: "text", content: text });
           }
+
+          // Persist assistant message to DB
+          await addMessage(sessionId, {
+            role: "assistant",
+            content: text || "✅ Done.",
+            toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
+            timestamp: Date.now(),
+          });
 
           send({ type: "done" });
           controller.close();
         } catch (err: any) {
           console.error("Agent error:", err.message);
+
+          // Persist error message
+          await addMessage(sessionId, {
+            role: "assistant",
+            content: `❌ Error: ${err.message}`,
+            timestamp: Date.now(),
+          });
+
           send({ type: "error", content: err.message || "Agent error" });
           send({ type: "done" });
           controller.close();

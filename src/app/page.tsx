@@ -5,11 +5,15 @@ import Link from "next/link";
 import ToolCard from "./components/ToolCard";
 import MessageContent from "./components/MessageContent";
 import CommandPalette from "./components/CommandPalette";
-import {
-  getSessions, saveSessions, getActiveSessionId, setActiveSessionId,
-  getSessionMessages, saveSessionMessages, createSession, deleteSession,
-  renameSession, type Session,
-} from "@/lib/sessions";
+// Server-side session management — no more localStorage for sessions/messages
+
+interface Session {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+}
 
 interface Message {
   id: string;
@@ -64,32 +68,38 @@ export default function Home() {
     return () => el.removeEventListener("scroll", handler);
   }, []);
 
-  // Load sessions
-  useEffect(() => {
-    const s = getSessions();
-    if (s.length === 0) {
-      const def: Session = { id: "default", name: "Main", createdAt: Date.now(), lastMessageAt: Date.now(), messageCount: 0 };
-      saveSessions([def]);
-      setSessions([def]);
-    } else {
-      setSessions(s);
-    }
-    const aid = getActiveSessionId();
-    setActiveId(aid);
-    setMessages(getSessionMessages(aid));
+  // Load sessions from server
+  const loadSessions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sessions");
+      const data = await res.json();
+      setSessions(data.sessions || []);
+    } catch {}
   }, []);
 
-  // Save messages
+  const loadMessages = useCallback(async (sid: string) => {
+    try {
+      const res = await fetch(`/api/sessions?id=${sid}&limit=100`);
+      const data = await res.json();
+      if (data.messages) {
+        setMessages(data.messages.map((m: any) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp,
+          toolCalls: m.toolCalls,
+        })));
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
-    if (messages.length > 0) {
-      saveSessionMessages(activeId, messages);
-      const updated = sessions.map((s) =>
-        s.id === activeId ? { ...s, lastMessageAt: Date.now(), messageCount: messages.length } : s
-      );
-      saveSessions(updated);
-      setSessions(updated);
-    }
-  }, [messages]);
+    // Load sessions from server on mount
+    loadSessions();
+    const savedActive = localStorage.getItem("karya-active-session") || "default";
+    setActiveId(savedActive);
+    loadMessages(savedActive);
+  }, [loadSessions, loadMessages]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText, streamingTools]);
 
@@ -100,27 +110,44 @@ export default function Home() {
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  const switchSession = (id: string) => {
+  const switchSession = useCallback(async (id: string) => {
     setActiveId(id);
-    setActiveSessionId(id);
-    setMessages(getSessionMessages(id));
-  };
+    localStorage.setItem("karya-active-session", id);
+    await loadMessages(id);
+  }, [loadMessages]);
 
-  const newSession = () => {
-    const s = createSession();
-    setSessions(getSessions());
-    setActiveId(s.id);
-    setMessages([]);
-  };
+  const newSession = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "create" }),
+      });
+      const data = await res.json();
+      if (data.success && data.session) {
+        setActiveId(data.session.id);
+        localStorage.setItem("karya-active-session", data.session.id);
+        setMessages([]);
+        await loadSessions();
+      }
+    } catch {}
+  }, [loadSessions]);
 
-  const delSession = (id: string) => {
-    deleteSession(id);
-    const remaining = getSessions();
-    setSessions(remaining);
-    if (id === activeId && remaining.length > 0) {
-      switchSession(remaining[0].id);
-    }
-  };
+  const delSession = useCallback(async (id: string) => {
+    try {
+      await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      await loadSessions();
+      if (id === activeId) {
+        setActiveId("default");
+        localStorage.setItem("karya-active-session", "default");
+        await loadMessages("default");
+      }
+    } catch {}
+  }, [activeId, loadSessions, loadMessages]);
 
   // File drop handler
   const handleFileDrop = async (files: FileList) => {
@@ -148,9 +175,10 @@ export default function Home() {
     setInput(""); setIsLoading(true); setStreamingText(""); setStreamingTools([]); setTaskCount((c) => c + 1);
 
     try {
+      // Send sessionId — server handles history from DB
       const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, history: messages.map((m) => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({ message: msg, sessionId: activeId }),
       });
       if (!res.ok) throw new Error("Server error");
 
@@ -169,6 +197,13 @@ export default function Home() {
           try {
             const d = JSON.parse(line.slice(6).trim());
             if (d.type === "text") { fullText += d.content; setStreamingText(fullText); }
+            else if (d.type === "session") {
+              // Server may assign a new session ID
+              if (d.sessionId && d.sessionId !== activeId) {
+                setActiveId(d.sessionId);
+                localStorage.setItem("karya-active-session", d.sessionId);
+              }
+            }
             else if (d.type === "tool-call") { tools.push({ toolName: d.toolName, args: d.args, status: "running" }); setStreamingTools([...tools]); }
             else if (d.type === "tool-result") { const i = tools.findIndex((t) => t.toolName === d.toolName && t.status === "running"); if (i !== -1) { tools[i].result = d.result; tools[i].status = "done"; } setStreamingTools([...tools]); }
             else if (d.type === "error") { fullText += `\n❌ ${d.content}`; setStreamingText(fullText); }
@@ -176,73 +211,73 @@ export default function Home() {
         }
       }
 
-      setMessages((prev) => {
-        const updated = [...prev, { id: (Date.now() + 1).toString(), role: "assistant" as const, content: fullText || "✅ Done.", timestamp: Date.now(), toolCalls: tools.map((t) => ({ ...t })) }];
-        // Auto-rename session from first user message
-        if (prev.length <= 2) {
-          const firstUser = prev.find((m) => m.role === "user");
-          if (firstUser) {
-            renameSession(activeId, firstUser.content.slice(0, 25) + (firstUser.content.length > 25 ? "..." : ""));
-            setSessions(getSessions());
-          }
-        }
-        return updated;
-      });
+      // Add assistant message locally (server already persisted it)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(), role: "assistant" as const,
+          content: fullText || "✅ Done.", timestamp: Date.now(),
+          toolCalls: tools.map((t) => ({ ...t })),
+        },
+      ]);
       setStreamingText(""); setStreamingTools([]);
+
+      // Refresh session list (name may have been auto-updated)
+      loadSessions();
     } catch (err: any) {
       setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: `❌ ${err.message}`, timestamp: Date.now() }]);
       setStreamingText(""); setStreamingTools([]);
     } finally { setIsLoading(false); }
-  }, [input, isLoading, messages, activeId]);
+  }, [input, isLoading, activeId, loadSessions]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } };
 
-  // Quick submit — for example buttons
+  // Quick submit — for example buttons (reuses handleSubmit logic)
   const quickSend = useCallback((text: string) => {
     if (isLoading) return;
-    setInput(text);
-    // Need to submit after state update
-    setTimeout(() => {
-      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-      // Direct submit
-      const userMsg: Message = { id: Date.now().toString(), role: "user", content: text, timestamp: Date.now() };
-      setMessages((prev) => [...prev, userMsg]);
-      setIsLoading(true); setStreamingText(""); setStreamingTools([]); setTaskCount((c) => c + 1);
-      setInput("");
+    // Directly trigger send flow
+    const userMsg: Message = { id: Date.now().toString(), role: "user", content: text, timestamp: Date.now() };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsLoading(true); setStreamingText(""); setStreamingTools([]); setTaskCount((c) => c + 1);
+    setInput("");
 
-      fetch("/api/chat", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history: messages.map((m) => ({ role: m.role, content: m.content })) }),
-      }).then(async (res) => {
-        if (!res.ok) throw new Error("Server error");
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let fullText = "", buffer = "";
-        const tools: { toolName: string; args?: any; result?: any; status: "running" | "done" }[] = [];
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n"); buffer = lines.pop() || "";
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const d = JSON.parse(line.slice(6).trim());
-              if (d.type === "text") { fullText += d.content; setStreamingText(fullText); }
-              else if (d.type === "tool-call") { tools.push({ toolName: d.toolName, args: d.args, status: "running" }); setStreamingTools([...tools]); }
-              else if (d.type === "tool-result") { const i = tools.findIndex((t) => t.toolName === d.toolName && t.status === "running"); if (i !== -1) { tools[i].result = d.result; tools[i].status = "done"; } setStreamingTools([...tools]); }
-              else if (d.type === "error") { fullText += `\n❌ ${d.content}`; setStreamingText(fullText); }
-            } catch {}
-          }
+    fetch("/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, sessionId: activeId }),
+    }).then(async (res) => {
+      if (!res.ok) throw new Error("Server error");
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "", buffer = "";
+      const tools: { toolName: string; args?: any; result?: any; status: "running" | "done" }[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n"); buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const d = JSON.parse(line.slice(6).trim());
+            if (d.type === "text") { fullText += d.content; setStreamingText(fullText); }
+            else if (d.type === "session" && d.sessionId) {
+              setActiveId(d.sessionId);
+              localStorage.setItem("karya-active-session", d.sessionId);
+            }
+            else if (d.type === "tool-call") { tools.push({ toolName: d.toolName, args: d.args, status: "running" }); setStreamingTools([...tools]); }
+            else if (d.type === "tool-result") { const i = tools.findIndex((t) => t.toolName === d.toolName && t.status === "running"); if (i !== -1) { tools[i].result = d.result; tools[i].status = "done"; } setStreamingTools([...tools]); }
+            else if (d.type === "error") { fullText += `\n❌ ${d.content}`; setStreamingText(fullText); }
+          } catch {}
         }
-        setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: fullText || "✅ Done.", timestamp: Date.now(), toolCalls: tools.map((t) => ({ ...t })) }]);
-        setStreamingText(""); setStreamingTools([]);
-      }).catch((err) => {
-        setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: `❌ ${err.message}`, timestamp: Date.now() }]);
-        setStreamingText(""); setStreamingTools([]);
-      }).finally(() => { setIsLoading(false); });
-    }, 0);
-  }, [isLoading, messages]);
+      }
+      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: fullText || "✅ Done.", timestamp: Date.now(), toolCalls: tools.map((t) => ({ ...t })) }]);
+      setStreamingText(""); setStreamingTools([]);
+      loadSessions();
+    }).catch((err) => {
+      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: `❌ ${err.message}`, timestamp: Date.now() }]);
+      setStreamingText(""); setStreamingTools([]);
+    }).finally(() => { setIsLoading(false); });
+  }, [isLoading, activeId, loadSessions]);
 
   const currentSession = sessions.find((s) => s.id === activeId);
 
