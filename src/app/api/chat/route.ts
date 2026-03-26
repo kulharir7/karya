@@ -181,38 +181,39 @@ export async function POST(req: NextRequest) {
           const fullStream = (streamResult as any).fullStream;
           for await (const event of fullStream) {
             const e = event as any;
+            const p = e.payload || {};  // Mastra wraps all data in payload
 
             // Text streaming — word by word to UI
-            if (e.type === "text-delta") {
-              fullText += e.textDelta;
-              send({ type: "text-delta", content: e.textDelta });
+            if (e.type === "text-delta" && p.textDelta) {
+              fullText += p.textDelta;
+              send({ type: "text-delta", content: p.textDelta });
             }
 
             // Tool call START — show in UI immediately (amber spinner)
             if (e.type === "tool-call") {
-              const rawName = e.toolName || "unknown";
+              const rawName = p.toolName || "unknown";
               const toolName = resolveToolName(rawName);
-              const toolCallId = e.toolCallId || `tc-${Date.now()}`;
+              const toolCallId = p.toolCallId || `tc-${Date.now()}`;
 
-              pendingTools.set(toolCallId, { toolName, args: e.args || {} });
-              await eventBus.emit("tool:before_call", { toolName, args: e.args || {} });
-              send({ type: "tool-call", toolName, args: e.args || {} });
+              pendingTools.set(toolCallId, { toolName, args: p.args || {} });
+              await eventBus.emit("tool:before_call", { toolName, args: p.args || {} });
+              send({ type: "tool-call", toolName, args: p.args || {} });
             }
 
             // Tool RESULT — update UI (green checkmark)
             if (e.type === "tool-result") {
-              const toolCallId = e.toolCallId || "";
+              const toolCallId = p.toolCallId || "";
               const pending = pendingTools.get(toolCallId);
-              const rawName = e.toolName || pending?.toolName || "unknown";
+              const rawName = p.toolName || pending?.toolName || "unknown";
               const toolName = resolveToolName(rawName);
-              const result = e.result || null;
+              const result = p.result || null;
 
               send({ type: "tool-result", toolName, result });
               await eventBus.emit("tool:after_call", { toolName, result });
 
               allToolCalls.push({
                 toolName,
-                args: pending?.args || {},
+                args: pending?.args || p.args || {},
                 result,
                 status: "done",
               });
