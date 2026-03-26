@@ -26,13 +26,20 @@ const ROUTE_PATTERNS: Record<AgentType, { keywords: string[]; patterns: RegExp[]
       "makemytrip", "booking", "form fill", "login", "signup",
       "screenshot", "page", "scrape", "extract from web",
       "kholo", "site", "kholna", "browser",
+      "flight", "hotel", "train", "bus",
     ],
     patterns: [
       /open\s+(https?:\/\/|www\.)/i,
-      /go\s+to\s+\w+\.(com|org|net|in|io)/i,
+      /open\s+\w+\.(com|org|net|in|io|co)/i,
+      /go\s+to\s+\w+/i,
+      /\w+\.(com|org|net|in|io)\b/i,   // any domain name
       /search\s+(on|for|google|online)/i,
       /(?:website|site|page)\s+(?:pe|par|se|ka)/i,
-      /(?:flight|hotel|train)\s+(?:check|book|search|dekh)/i,
+      /(?:flight|hotel|train|bus)\s+(?:check|book|search|dekh|find|compare)/i,
+      /(?:check|book|search|find|compare)\s+(?:flight|hotel|train|bus)/i,
+      /(?:delhi|mumbai|bangalore|kolkata|chennai)\s+(?:to|se)\s+/i,
+      /(?:to|se)\s+(?:delhi|mumbai|bangalore|kolkata|chennai)/i,
+      /(?:kholo|kholna|open)\s+/i,
     ],
   },
   file: {
@@ -41,7 +48,7 @@ const ROUTE_PATTERNS: Record<AgentType, { keywords: string[]; patterns: RegExp[]
       "read file", "write file", "create file", "delete file", "move file",
       "rename", "copy", "zip", "unzip", "compress", "extract",
       "pdf", "image", "resize", "batch rename", "size",
-      "kya files", "file banao", "file dhundho", "folder",
+      "kya files", "file banao", "file dhundho", "folder mein",
     ],
     patterns: [
       /(?:read|open|show|dikhao)\s+(?:file|folder)/i,
@@ -77,15 +84,13 @@ const ROUTE_PATTERNS: Record<AgentType, { keywords: string[]; patterns: RegExp[]
       "explain", "tell me about", "information", "facts",
       "news", "latest", "trending", "compare", "difference between",
       "pros and cons", "review", "best", "top 10",
-      "batao", "kya hai", "kaun hai", "pata karo", "dhundho",
     ],
     patterns: [
-      /(?:what|who|when|where|why|how)\s+(?:is|are|was|were|do|does)/i,
+      /(?:what|who|when|where|why|how)\s+(?:is|are|was|were|do|does)\s+\w+\s+\w+/i,  // needs more context
       /(?:find|search|look up|research)\s+(?:about|for|info)/i,
       /(?:compare|difference|versus|vs)\s+/i,
-      /(?:explain|describe|tell\s+me)\s+(?:about|what)/i,
-      /(?:kya|kaun|kab|kahan|kaise|kyun)\s+/i,
-      /(?:best|top|latest|trending)\s+\w+/i,
+      /(?:explain|describe|tell\s+me)\s+(?:about|what)\s+\w+/i,
+      /(?:best|top|latest|trending)\s+\w+\s+\w+/i,  // "best restaurants in Delhi"
     ],
   },
   "data-analyst": {
