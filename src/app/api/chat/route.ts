@@ -11,14 +11,31 @@ import {
 } from "@/lib/session-manager";
 import { eventBus } from "@/lib/event-bus";
 import { getWorkspaceContext, initWorkspace, logToDaily } from "@/lib/memory-engine";
+import { routeMessage, type AgentType } from "@/lib/agent-router";
 
 // Cache MCP tools for 60 seconds
 let mcpToolsCache: { tools: Record<string, any>; timestamp: number } = { tools: {}, timestamp: 0 };
 const MCP_CACHE_TTL = 60_000;
 
-async function getAgent() {
+// Agent ID mapping for routing
+const AGENT_ID_MAP: Record<AgentType, string> = {
+  supervisor: "karya",
+  browser: "karya-browser",
+  file: "karya-file",
+  coder: "karya-coder",
+  researcher: "karya-researcher",
+  "data-analyst": "karya-data-analyst",
+};
+
+async function getAgent(agentType: AgentType = "supervisor") {
   const { mastra } = await import("@/mastra");
-  return mastra.getAgent("karya");
+  const agentId = AGENT_ID_MAP[agentType] || "karya";
+  try {
+    return mastra.getAgent(agentId as any);
+  } catch {
+    // Fallback to supervisor if agent not found
+    return mastra.getAgent("karya");
+  }
 }
 
 async function getCachedMCPToolsets(): Promise<Record<string, any>> {
@@ -119,7 +136,9 @@ export async function POST(req: NextRequest) {
       await renameSession(sessionId, autoName);
     }
 
-    const agent = await getAgent();
+    // Route message to the best specialist agent
+    const route = routeMessage(message);
+    const agent = await getAgent(route.agent);
     const encoder = new TextEncoder();
 
     // Fetch MCP toolsets
@@ -133,7 +152,13 @@ export async function POST(req: NextRequest) {
         };
 
         send({ type: "session", sessionId });
-        await eventBus.emit("agent:start", { sessionId, message });
+        send({
+          type: "agent-route",
+          agent: route.agent,
+          confidence: route.confidence,
+          reason: route.reason,
+        });
+        await eventBus.emit("agent:start", { sessionId, message, agent: route.agent, confidence: route.confidence });
 
         try {
           const streamOptions: any = {};
@@ -209,7 +234,7 @@ export async function POST(req: NextRequest) {
           // Log to daily memory
           if (allToolCalls.length > 0) {
             const toolNames = allToolCalls.map((t) => t.toolName).join(", ");
-            logToDaily(`Used tools: ${toolNames} | Session: ${sessionId}`);
+            logToDaily(`[${route.agent}] Used tools: ${toolNames} | Session: ${sessionId}`);
           }
 
           await eventBus.emit("agent:end", { sessionId, toolCount: allToolCalls.length, textLength: fullText.length });

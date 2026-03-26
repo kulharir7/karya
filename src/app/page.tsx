@@ -39,6 +39,7 @@ export default function Home() {
   const [dark, setDark] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [activeAgent, setActiveAgent] = useState<{ agent: string; confidence: number; reason: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -198,11 +199,13 @@ export default function Home() {
             const d = JSON.parse(line.slice(6).trim());
             if (d.type === "text-delta" || d.type === "text") { fullText += d.content; setStreamingText(fullText); }
             else if (d.type === "session") {
-              // Server may assign a new session ID
               if (d.sessionId && d.sessionId !== activeId) {
                 setActiveId(d.sessionId);
                 localStorage.setItem("karya-active-session", d.sessionId);
               }
+            }
+            else if (d.type === "agent-route") {
+              setActiveAgent({ agent: d.agent, confidence: d.confidence, reason: d.reason });
             }
             else if (d.type === "tool-call") { tools.push({ toolName: d.toolName, args: d.args, status: "running" }); setStreamingTools([...tools]); }
             else if (d.type === "tool-result") { const i = tools.findIndex((t) => t.toolName === d.toolName && t.status === "running"); if (i !== -1) { tools[i].result = d.result; tools[i].status = "done"; } setStreamingTools([...tools]); }
@@ -220,13 +223,13 @@ export default function Home() {
           toolCalls: tools.map((t) => ({ ...t })),
         },
       ]);
-      setStreamingText(""); setStreamingTools([]);
+      setStreamingText(""); setStreamingTools([]); setActiveAgent(null);
 
       // Refresh session list (name may have been auto-updated)
       loadSessions();
     } catch (err: any) {
       setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: `❌ ${err.message}`, timestamp: Date.now() }]);
-      setStreamingText(""); setStreamingTools([]);
+      setStreamingText(""); setStreamingTools([]); setActiveAgent(null);
     } finally { setIsLoading(false); }
   }, [input, isLoading, activeId, loadSessions]);
 
@@ -264,6 +267,9 @@ export default function Home() {
               setActiveId(d.sessionId);
               localStorage.setItem("karya-active-session", d.sessionId);
             }
+            else if (d.type === "agent-route") {
+              setActiveAgent({ agent: d.agent, confidence: d.confidence, reason: d.reason });
+            }
             else if (d.type === "tool-call") { tools.push({ toolName: d.toolName, args: d.args, status: "running" }); setStreamingTools([...tools]); }
             else if (d.type === "tool-result") { const i = tools.findIndex((t) => t.toolName === d.toolName && t.status === "running"); if (i !== -1) { tools[i].result = d.result; tools[i].status = "done"; } setStreamingTools([...tools]); }
             else if (d.type === "error") { fullText += `\n❌ ${d.content}`; setStreamingText(fullText); }
@@ -271,7 +277,7 @@ export default function Home() {
         }
       }
       setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: fullText || "✅ Done.", timestamp: Date.now(), toolCalls: tools.map((t) => ({ ...t })) }]);
-      setStreamingText(""); setStreamingTools([]);
+      setStreamingText(""); setStreamingTools([]); setActiveAgent(null);
       loadSessions();
     }).catch((err) => {
       setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: `❌ ${err.message}`, timestamp: Date.now() }]);
@@ -459,11 +465,31 @@ export default function Home() {
                 <div className="flex items-start gap-3">
                   <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-xs shrink-0 mt-0.5">⚡</div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-gray-400 mb-1">Karya</div>
+                    <div className="text-[10px] text-gray-400 mb-1 flex items-center gap-2">
+                      <span>Karya</span>
+                      {activeAgent && activeAgent.agent !== "supervisor" && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600 text-[9px] font-medium">
+                          {activeAgent.agent === "browser" && "🌐 Browser Agent"}
+                          {activeAgent.agent === "file" && "📁 File Agent"}
+                          {activeAgent.agent === "coder" && "💻 Coder Agent"}
+                          {activeAgent.agent === "researcher" && "🔍 Researcher"}
+                          {activeAgent.agent === "data-analyst" && "📊 Data Analyst"}
+                        </span>
+                      )}
+                    </div>
                     {streamingTools.map((t, i) => <ToolCard key={i} toolName={t.toolName} status={t.status} args={t.args} result={t.result} />)}
                     {streamingText && <div className="mt-1"><MessageContent content={streamingText} /><span className="inline-block w-0.5 h-4 bg-purple-500 animate-pulse rounded-sm ml-0.5 align-text-bottom" /></div>}
                     {isLoading && !streamingText && streamingTools.length === 0 && (
-                      <div className="flex items-center gap-2 py-1"><div className="flex gap-1 animate-thinking"><span className="w-1.5 h-1.5 rounded-full bg-purple-400" /><span className="w-1.5 h-1.5 rounded-full bg-purple-400" /><span className="w-1.5 h-1.5 rounded-full bg-purple-400" /></div><span className="text-xs text-gray-400">Thinking...</span></div>
+                      <div className="flex items-center gap-2 py-1">
+                        <div className="flex gap-1 animate-thinking">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                        </div>
+                        <span className="text-xs text-gray-400">
+                          {activeAgent ? `${activeAgent.reason}...` : "Thinking..."}
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
