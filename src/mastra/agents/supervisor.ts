@@ -19,6 +19,10 @@ import {
   memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
 } from "../tools/memory";
 import { scheduleTaskTool, listTasksTool, cancelTaskTool } from "../tools/scheduler";
+import {
+  delegateToBrowserAgent, delegateToFileAgent, delegateToCoderAgent,
+  delegateToResearcherAgent, delegateToDataAnalystAgent,
+} from "../tools/agents";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -33,12 +37,25 @@ You are the brain. You receive complex tasks from users and:
 4. VERIFY results
 5. REPORT back clearly
 
+## CRITICAL: MEMORY USAGE
+Before answering ANY question, ALWAYS:
+1. Use memory-search to check if relevant information exists from previous conversations
+2. Use memory-read to check today's daily log (memory/YYYY-MM-DD.md) for recent context
+3. After completing a task, use memory-log to record what you did and any important decisions
+
+When the user says "remember this" or asks about something from before:
+- ALWAYS search memory first using memory-search
+- If you learn something important about the user, save it to MEMORY.md using memory-write
+- Log every significant action to the daily log using memory-log
+
 ## THINKING PROCESS
 For every task, think step by step:
+- First, search memory for relevant past context
 - What is the user asking?
 - What tools do I need?
 - What is the correct order of operations?
 - What could go wrong? How do I handle failures?
+- After completing the task, log the result to memory
 - How do I verify the result is correct?
 
 ## TOOL CATEGORIES
@@ -80,6 +97,21 @@ For every task, think step by step:
 - memory-write: Write/update a memory file
 - memory-log: Append to today's daily log (auto-timestamped)
 - memory-list: List all memory files
+
+### 🤖 DELEGATION (specialist agents)
+- delegate-browser-agent: Send web browsing tasks to the Browser specialist
+- delegate-file-agent: Send file management tasks to the File specialist
+- delegate-coder-agent: Send coding/programming tasks to the Coder specialist
+- delegate-researcher-agent: Send research/information tasks to the Researcher specialist
+- delegate-data-analyst-agent: Send data analysis tasks to the Data Analyst specialist
+
+**WHEN TO DELEGATE:**
+- For complex coding tasks (multi-file projects, debugging), USE delegate-coder-agent
+- For web browsing tasks (opening sites, scraping), USE delegate-browser-agent
+- For file operations (reading, writing, organizing), USE delegate-file-agent
+- For research questions ("what is X?", comparisons), USE delegate-researcher-agent
+- For data analysis (CSV, JSON, statistics), USE delegate-data-analyst-agent
+- For simple tasks (system info, clipboard, time), handle DIRECTLY with your own tools
 
 ### ⏰ SCHEDULER (automated tasks)
 - task-schedule: Create recurring or one-shot tasks (hourly/daily/weekly/once)
@@ -153,5 +185,8 @@ Example: "Download all images from this website and resize them"
     memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
     // Scheduler
     scheduleTaskTool, listTasksTool, cancelTaskTool,
+    // Agent Delegation (Supervisor Pattern)
+    delegateToBrowserAgent, delegateToFileAgent, delegateToCoderAgent,
+    delegateToResearcherAgent, delegateToDataAnalystAgent,
   },
 });

@@ -11,32 +11,18 @@ import {
 } from "@/lib/session-manager";
 import { eventBus } from "@/lib/event-bus";
 import { getWorkspaceContext, initWorkspace, logToDaily } from "@/lib/memory-engine";
-import { routeMessage } from "@/lib/agent-router";
-import type { AgentType } from "@/lib/agent-router";
+// Agent routing is now handled by the supervisor agent itself via tool calling
+// (Supervisor Pattern from "Principles of Building AI Agents" book)
+// The supervisor has delegate-*-agent tools and decides which specialist to call
 
 // Cache MCP tools for 60 seconds
 let mcpToolsCache: { tools: Record<string, any>; timestamp: number } = { tools: {}, timestamp: 0 };
 const MCP_CACHE_TTL = 60_000;
 
-// Agent ID mapping for routing
-const AGENT_ID_MAP: Record<AgentType, string> = {
-  supervisor: "karya",
-  browser: "karya-browser",
-  file: "karya-file",
-  coder: "karya-coder",
-  researcher: "karya-researcher",
-  "data-analyst": "karya-data-analyst",
-};
-
-async function getAgent(agentType: AgentType = "supervisor") {
+async function getAgent() {
   const { mastra } = await import("@/mastra");
-  const agentId = AGENT_ID_MAP[agentType] || "karya";
-  try {
-    return mastra.getAgent(agentId as any);
-  } catch {
-    // Fallback to supervisor if agent not found
-    return mastra.getAgent("karya");
-  }
+  // Always use supervisor — it delegates to specialists via tools
+  return mastra.getAgent("karya");
 }
 
 async function getCachedMCPToolsets(): Promise<Record<string, any>> {
@@ -80,6 +66,11 @@ const TOOL_NAME_MAP: Record<string, string> = {
   scheduleTaskTool: "task-schedule",
   listTasksTool: "task-list",
   cancelTaskTool: "task-cancel",
+  delegateToBrowserAgent: "delegate-browser-agent",
+  delegateToFileAgent: "delegate-file-agent",
+  delegateToCoderAgent: "delegate-coder-agent",
+  delegateToResearcherAgent: "delegate-researcher-agent",
+  delegateToDataAnalystAgent: "delegate-data-analyst-agent",
 };
 
 function resolveToolName(raw: string): string {
@@ -140,9 +131,8 @@ export async function POST(req: NextRequest) {
       await renameSession(sessionId, autoName);
     }
 
-    // Route message to the best specialist agent (LLM-based)
-    const route = await routeMessage(message);
-    const agent = await getAgent(route.agent);
+    // Supervisor handles everything — delegates to specialists via tools
+    const agent = await getAgent();
     const encoder = new TextEncoder();
 
     // Fetch MCP toolsets
@@ -156,13 +146,7 @@ export async function POST(req: NextRequest) {
         };
 
         send({ type: "session", sessionId });
-        send({
-          type: "agent-route",
-          agent: route.agent,
-          confidence: route.confidence,
-          reason: route.reason,
-        });
-        await eventBus.emit("agent:start", { sessionId, message, agent: route.agent, confidence: route.confidence });
+        await eventBus.emit("agent:start", { sessionId, message });
 
         try {
           const streamOptions: any = {};
@@ -227,7 +211,7 @@ export async function POST(req: NextRequest) {
           // Log to daily memory
           if (allToolCalls.length > 0) {
             const toolNames = allToolCalls.map((t) => t.toolName).join(", ");
-            logToDaily(`[${route.agent}] Used tools: ${toolNames} | Session: ${sessionId}`);
+            logToDaily(`Used tools: ${toolNames} | Session: ${sessionId}`);
           }
 
           await eventBus.emit("agent:end", { sessionId, toolCount: allToolCalls.length, textLength: fullText.length });
