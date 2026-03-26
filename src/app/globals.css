@@ -41,3 +41,14 @@ body {
 .animate-thinking span:nth-child(1) { animation: thinking 1.4s infinite 0s; }
 .animate-thinking span:nth-child(2) { animation: thinking 1.4s infinite 0.2s; }
 .animate-thinking span:nth-child(3) { animation: thinking 1.4s infinite 0.4s; }
+
+/* Sidebar custom scrollbar — thin, dark */
+.sidebar-scroll::-webkit-scrollbar { width: 3px; }
+.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+.sidebar-scroll::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 10px; }
+.sidebar-scroll::-webkit-scrollbar-thumb:hover { background: #3a3a4a; }
+
+/* Sidebar active item glow */
+.sidebar-active-glow {
+  box-shadow: inset 2px 0 0 #7c3aed, 0 0 8px rgba(124, 58, 237, 0.1);
+}

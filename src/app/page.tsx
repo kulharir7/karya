@@ -7,6 +7,73 @@ import MessageContent from "./components/MessageContent";
 import CommandPalette from "./components/CommandPalette";
 // Server-side session management — no more localStorage for sessions/messages
 
+// ─── Sidebar Components (OpenClaw-style) ───
+
+function SidebarSection({ title, children, defaultOpen = true, action }: {
+  title: string; children: React.ReactNode; defaultOpen?: boolean; action?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mt-1">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-2 group"
+      >
+        <span className="text-[10px] font-semibold text-[#5a5a72] uppercase tracking-[0.08em]">{title}</span>
+        <div className="flex items-center gap-1.5">
+          {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
+          <svg
+            className={`w-3 h-3 text-[#3a3a4a] transition-transform duration-200 ${open ? "" : "-rotate-90"}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+      {open && <div className="pb-1">{children}</div>}
+    </div>
+  );
+}
+
+function SidebarItem({ icon, label, active, onClick, onDelete, badge }: {
+  icon: string; label: string; active?: boolean; onClick?: () => void; onDelete?: () => void; badge?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`group w-full flex items-center gap-2.5 px-4 py-[7px] text-[13px] transition-all duration-150 ${
+        active
+          ? "text-white bg-[#1a1a28] border-l-2 border-purple-500 pl-[14px]"
+          : "text-[#8e8ea0] hover:text-[#c4c4d4] hover:bg-[#16161f] border-l-2 border-transparent pl-[14px]"
+      }`}
+    >
+      <span className="text-sm shrink-0 w-5 text-center">{icon}</span>
+      <span className="flex-1 text-left truncate">{label}</span>
+      {badge && (
+        <kbd className="text-[9px] text-[#4a4a5a] bg-[#1a1a28] px-1.5 py-0.5 rounded font-mono">{badge}</kbd>
+      )}
+      {onDelete && (
+        <span
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="opacity-0 group-hover:opacity-100 text-[#4a4a5a] hover:text-red-400 text-xs transition-opacity cursor-pointer"
+        >✕</span>
+      )}
+    </button>
+  );
+}
+
+function SidebarLink({ icon, label, href }: { icon: string; label: string; href: string }) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-2.5 px-4 py-[7px] text-[13px] text-[#8e8ea0] hover:text-[#c4c4d4] hover:bg-[#16161f] border-l-2 border-transparent pl-[14px] transition-all duration-150"
+    >
+      <span className="text-sm shrink-0 w-5 text-center">{icon}</span>
+      <span className="flex-1 text-left truncate">{label}</span>
+    </Link>
+  );
+}
+
 interface Session {
   id: string;
   name: string;
@@ -311,76 +378,83 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/20 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 fixed md:static z-40 w-56 bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col shrink-0 h-full transition-transform duration-200`}>
-        <div className="px-4 py-3 border-b border-[var(--border)]">
+      {/* Sidebar — OpenClaw-style with collapsible sections */}
+      <div className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 fixed md:static z-40 w-[220px] bg-[#0f0f14] border-r border-[#1e1e2a] flex flex-col shrink-0 h-full transition-transform duration-200`}>
+        {/* Logo */}
+        <div className="px-4 py-3.5 border-b border-[#1e1e2a]">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-xs shadow-sm">⚡</div>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-purple-500/20">⚡</div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-bold text-gray-900">Karya</div>
-              <div className="text-[9px] text-gray-400">AI Computer Agent</div>
+              <div className="text-[13px] font-bold text-white tracking-tight">Karya</div>
+              <div className="text-[9px] text-[#5a5a72] font-medium">AI Computer Agent</div>
             </div>
+            <button onClick={toggleDark} className="text-[#5a5a72] hover:text-white transition-colors text-xs">
+              {dark ? "☀️" : "🌙"}
+            </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-2">
-          {/* Sessions */}
-          <div className="px-3 mb-1 flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Chats</span>
-            <button onClick={newSession} className="text-[10px] text-purple-600 hover:text-purple-800 font-medium">+ New</button>
-          </div>
-          {sessions.map((s) => (
-            <div key={s.id} className={`group flex items-center gap-2 px-4 py-2 text-sm cursor-pointer transition-colors ${s.id === activeId ? "text-purple-700 bg-purple-50 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>
-              <button onClick={() => switchSession(s.id)} className="flex-1 text-left truncate">
-                💬 {s.name}
-              </button>
-              {s.id !== "default" && (
-                <button onClick={() => delSession(s.id)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs transition-opacity">✕</button>
-              )}
-            </div>
-          ))}
+        <div className="flex-1 overflow-y-auto sidebar-scroll">
+          {/* ─── CHAT Section ─── */}
+          <SidebarSection title="CHAT" defaultOpen={true} action={
+            <button onClick={newSession} className="text-[10px] text-purple-400 hover:text-purple-300 font-medium transition-colors">+ New</button>
+          }>
+            {sessions.map((s) => (
+              <SidebarItem
+                key={s.id}
+                icon="💬"
+                label={s.name}
+                active={s.id === activeId}
+                onClick={() => switchSession(s.id)}
+                onDelete={s.id !== "default" ? () => delSession(s.id) : undefined}
+              />
+            ))}
+          </SidebarSection>
 
-          {/* Control */}
-          <div className="px-3 mt-4 mb-1">
-            <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Control</span>
-          </div>
-          <Link href="/dashboard" className="flex items-center gap-2.5 px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
-            📊 Dashboard
-          </Link>
-          <button onClick={() => setCmdOpen(true)} className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
-            🔍 <span className="flex-1 text-left">Command</span>
-            <kbd className="text-[9px] text-[var(--text-muted)] bg-[var(--bg-hover)] px-1 py-0.5 rounded">⌘K</kbd>
-          </button>
-          <Link href="/settings" className="flex items-center gap-2.5 px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
-            ⚙️ Settings
-          </Link>
-          <Link href="/help" className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-            ❓ Help & Docs
-          </Link>
+          {/* ─── CONTROL Section ─── */}
+          <SidebarSection title="CONTROL" defaultOpen={true}>
+            <SidebarLink icon="📊" label="Overview" href="/dashboard" />
+            <SidebarItem icon="🔍" label="Command" onClick={() => setCmdOpen(true)} badge="⌘K" />
+            <SidebarLink icon="🧠" label="Memory" href="/api/memory?action=list" />
+            <SidebarLink icon="📋" label="Sessions" href="/api/sessions" />
+            <SidebarLink icon="📡" label="Events" href="/api/events" />
+          </SidebarSection>
+
+          {/* ─── AGENT Section ─── */}
+          <SidebarSection title="AGENT" defaultOpen={true}>
+            <SidebarLink icon="🤖" label="Agents (6)" href="/api/agents" />
+            <SidebarLink icon="🔌" label="MCP Servers" href="/settings" />
+            <SidebarLink icon="🛠️" label="Tools (37)" href="/help" />
+          </SidebarSection>
+
+          {/* ─── SETTINGS Section ─── */}
+          <SidebarSection title="SETTINGS" defaultOpen={false}>
+            <SidebarLink icon="⚙️" label="Settings" href="/settings" />
+            <SidebarLink icon="❓" label="Help & Docs" href="/help" />
+            <SidebarItem icon="📥" label="Export Chat" onClick={() => {
+              const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}]\n${m.content}`).join("\n\n---\n\n");
+              const blob = new Blob([text], { type: "text/plain" });
+              const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `karya-chat-${new Date().toISOString().slice(0,10)}.txt`; a.click();
+            }} />
+          </SidebarSection>
         </div>
 
-        <div className="px-3 py-3 border-t border-gray-100">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
+        {/* Bottom status bar */}
+        <div className="px-3 py-3 border-t border-[#1e1e2a]">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-sm">
               <span className="text-[9px] text-white font-bold">K</span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] font-medium text-gray-700 truncate">Karya v0.1</div>
-              <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              <div className="text-[11px] font-medium text-[#c4c4d4] truncate">Karya v1.0</div>
+              <div className="flex items-center gap-1.5 text-[10px] text-[#5a5a72]">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-sm shadow-green-500/50" />
                 <span className="truncate">gpt-oss:120b</span>
-                <span>•</span>
+                <span className="text-[#2a2a3a]">•</span>
                 <span>{taskCount} tasks</span>
               </div>
             </div>
           </div>
-          <button onClick={() => {
-            const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}]\n${m.content}`).join("\n\n---\n\n");
-            const blob = new Blob([text], { type: "text/plain" });
-            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `karya-chat-${new Date().toISOString().slice(0,10)}.txt`; a.click();
-          }} className="w-full text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-md py-1.5 transition-all text-center">
-            📥 Export Chat
-          </button>
         </div>
       </div>
 
@@ -391,17 +465,23 @@ export default function Home() {
           <div className="flex items-center gap-2 text-sm flex-1 min-w-0">
             <span className="text-[var(--text-muted)]">Karya ›</span>
             <span className="font-medium text-[var(--text-primary)] truncate">{currentSession?.name || "Chat"}</span>
+            {activeAgent && activeAgent.agent !== "supervisor" && (
+              <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[10px] font-medium border border-purple-500/20">
+                {activeAgent.agent === "browser" && "🌐 Browser"}
+                {activeAgent.agent === "file" && "📁 File"}
+                {activeAgent.agent === "coder" && "💻 Coder"}
+                {activeAgent.agent === "researcher" && "🔍 Research"}
+                {activeAgent.agent === "data-analyst" && "📊 Data"}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {isLoading && (
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
-                <span className="text-xs text-purple-600">Working...</span>
+                <span className="text-xs text-purple-600 font-medium">Working...</span>
               </div>
             )}
-            <button onClick={toggleDark} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors" title="Toggle dark mode">
-              {dark ? "☀️" : "🌙"}
-            </button>
           </div>
         </div>
 
