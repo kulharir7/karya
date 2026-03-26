@@ -485,13 +485,30 @@ export default function Home() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {isLoading && (
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
                 <span className="text-xs text-purple-600 font-medium">Working...</span>
               </div>
             )}
+            {/* Session switcher dropdown */}
+            <select
+              value={activeId}
+              onChange={(e) => switchSession(e.target.value)}
+              className="text-xs bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-2 py-1 text-[var(--text-secondary)] focus:outline-none focus:border-purple-400 max-w-[140px] truncate"
+            >
+              {sessions.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={newSession}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors shadow-sm"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              New
+            </button>
           </div>
         </div>
 
