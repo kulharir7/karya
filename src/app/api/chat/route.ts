@@ -11,7 +11,8 @@ import {
 } from "@/lib/session-manager";
 import { eventBus } from "@/lib/event-bus";
 import { getWorkspaceContext, initWorkspace, logToDaily } from "@/lib/memory-engine";
-import { routeMessage, type AgentType } from "@/lib/agent-router";
+import { routeMessage } from "@/lib/agent-router";
+import type { AgentType } from "@/lib/agent-router";
 
 // Cache MCP tools for 60 seconds
 let mcpToolsCache: { tools: Record<string, any>; timestamp: number } = { tools: {}, timestamp: 0 };
@@ -139,8 +140,8 @@ export async function POST(req: NextRequest) {
       await renameSession(sessionId, autoName);
     }
 
-    // Route message to the best specialist agent
-    const route = routeMessage(message);
+    // Route message to the best specialist agent (LLM-based)
+    const route = await routeMessage(message);
     const agent = await getAgent(route.agent);
     const encoder = new TextEncoder();
 

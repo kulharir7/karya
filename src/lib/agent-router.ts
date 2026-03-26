@@ -1,194 +1,150 @@
 /**
- * Agent Router — determines which specialist agent should handle a task.
+ * Karya Agent Router — LLM-based intelligent routing.
  * 
- * Like OpenClaw's binding system but for internal routing.
- * Supervisor uses this to delegate to the right specialist.
- * 
- * Routing is keyword-based + intent classification.
- * Falls back to supervisor for ambiguous or multi-domain tasks.
+ * Uses the actual LLM to classify which specialist agent should handle a task.
+ * No keyword matching. The model THINKS and decides.
  */
 
 export type AgentType = "supervisor" | "browser" | "file" | "coder" | "researcher" | "data-analyst";
 
 interface RouteResult {
   agent: AgentType;
-  confidence: number; // 0-1
+  confidence: number;
   reason: string;
 }
 
-// Keyword patterns for each agent
-const ROUTE_PATTERNS: Record<AgentType, { keywords: string[]; patterns: RegExp[] }> = {
-  browser: {
-    keywords: [
-      "website", "webpage", "url", "http", "browse", "navigate", "click",
-      "google", "search online", "web search", "open site", "amazon",
-      "flipkart", "youtube", "facebook", "twitter", "linkedin",
-      "makemytrip", "booking", "form fill", "login", "signup",
-      "screenshot", "page", "scrape", "extract from web",
-      "kholo", "site", "kholna", "browser",
-      "flight", "hotel", "train", "bus",
-    ],
-    patterns: [
-      /open\s+(https?:\/\/|www\.)/i,
-      /open\s+\w+\.(com|org|net|in|io|co)/i,
-      /go\s+to\s+\w+/i,
-      /\w+\.(com|org|net|in|io)\b/i,   // any domain name
-      /search\s+(on|for|google|online)/i,
-      /(?:website|site|page)\s+(?:pe|par|se|ka)/i,
-      /(?:flight|hotel|train|bus)\s+(?:check|book|search|dekh|find|compare)/i,
-      /(?:check|book|search|find|compare)\s+(?:flight|hotel|train|bus)/i,
-      /(?:delhi|mumbai|bangalore|kolkata|chennai)\s+(?:to|se)\s+/i,
-      /(?:to|se)\s+(?:delhi|mumbai|bangalore|kolkata|chennai)/i,
-      /(?:kholo|kholna|open)\s+/i,
-    ],
-  },
-  file: {
-    keywords: [
-      "file", "folder", "directory", "desktop", "downloads", "documents",
-      "read file", "write file", "create file", "delete file", "move file",
-      "rename", "copy", "zip", "unzip", "compress", "extract",
-      "pdf", "image", "resize", "batch rename", "size",
-      "kya files", "file banao", "file dhundho", "folder mein",
-    ],
-    patterns: [
-      /(?:read|open|show|dikhao)\s+(?:file|folder)/i,
-      /(?:create|banao|write|likho)\s+(?:file|folder)/i,
-      /(?:move|rename|copy)\s+(?:file|folder)/i,
-      /(?:C:|D:|E:|F:)[\\/]/i, // Windows paths
-      /\.(txt|pdf|csv|json|md|jpg|png|zip|doc|xls)/i,
-      /(?:desktop|downloads?|documents?)\s+(?:pe|mein|me|par)/i,
-      /(?:kitna|size|kitni)\s+(?:bada|badi|size|space)/i,
-    ],
-  },
-  coder: {
-    keywords: [
-      "code", "program", "script", "function", "class", "variable",
-      "javascript", "typescript", "python", "html", "css", "react",
-      "node", "npm", "pip", "git", "github", "compile", "build",
-      "debug", "error", "bug", "fix", "refactor", "test",
-      "api", "server", "database", "algorithm",
-      "code likho", "script banao", "program chalao",
-      "app banao", "project banao", "website banao",
-    ],
-    patterns: [
-      /(?:write|create|make|banao|bana)\s+(?:a\s+)?(?:code|script|program|function)/i,
-      /(?:banao|bana|create|build|make)\s+.*(?:app|project|website|tool|game|calculator|tracker|dashboard)/i,
-      /(?:app|project|website|tool|game|calculator|tracker|dashboard)\s+(?:banao|bana|create|build)/i,
-      /(?:run|execute|chalao)\s+(?:code|script|command)/i,
-      /(?:debug|fix|solve)\s+(?:error|bug|issue)/i,
-      /(?:install|setup)\s+(?:npm|pip|package|node)/i,
-      /(?:git|github)\s+(?:clone|pull|push|commit|status)/i,
-      /(?:analyze|review)\s+(?:code|file|project)/i,
-      /(?:html|css|js|jsx|tsx|py)\s+(?:file|code)/i,
-      /(?:multiple|multi)\s+file/i,
-    ],
-  },
-  researcher: {
-    keywords: [
-      "research", "find out", "learn about", "what is", "who is",
-      "explain", "tell me about", "information", "facts",
-      "news", "latest", "trending", "compare", "difference between",
-      "pros and cons", "review", "best", "top 10",
-    ],
-    patterns: [
-      /(?:what|who|when|where|why|how)\s+(?:is|are|was|were|do|does)\s+\w+\s+\w+/i,  // needs more context
-      /(?:find|search|look up|research)\s+(?:about|for|info)/i,
-      /(?:compare|difference|versus|vs)\s+/i,
-      /(?:explain|describe|tell\s+me)\s+(?:about|what)\s+\w+/i,
-      /(?:best|top|latest|trending)\s+\w+\s+\w+/i,  // "best restaurants in Delhi"
-    ],
-  },
-  "data-analyst": {
-    keywords: [
-      "csv", "data", "analyze", "analysis", "statistics", "stats",
-      "spreadsheet", "excel", "table", "chart", "graph",
-      "calculate", "sum", "average", "count", "filter", "sort",
-      "transform", "convert", "json query", "parse",
-      "data dikhao", "analyze karo", "calculate karo",
-    ],
-    patterns: [
-      /(?:analyze|parse|process)\s+(?:csv|data|json|file)/i,
-      /(?:calculate|compute|count)\s+/i,
-      /(?:filter|sort|group)\s+(?:by|data|records)/i,
-      /(?:convert|transform)\s+(?:csv|json|data)/i,
-      /\.csv\b/i,
-      /(?:statistics|stats|summary)\s+(?:of|for|from)/i,
-    ],
-  },
-  supervisor: {
-    keywords: [], // Fallback — handles everything else
-    patterns: [],
-  },
-};
+const VALID_AGENTS: AgentType[] = ["supervisor", "browser", "file", "coder", "researcher", "data-analyst"];
+
+const ROUTING_PROMPT = `You are an intelligent task router. Given a user message, decide which specialist agent should handle it.
+
+Available agents:
+- **browser**: Web browsing, opening websites, searching online, filling forms, scraping web data, booking flights/hotels, checking prices on Amazon/Flipkart, any task involving a web browser.
+- **file**: File/folder operations — reading, writing, moving, renaming, searching files, ZIP/PDF handling, image resizing, checking folder contents, disk size.
+- **coder**: Programming tasks — writing code, creating apps/projects/scripts, debugging, git operations, npm/pip commands, running shell commands, building software, creating multi-file projects.
+- **researcher**: Information lookup — "what is X?", comparing things, finding facts, news, reviews, explaining concepts, deep research on topics.
+- **data-analyst**: Data processing — analyzing CSV/JSON files, statistics, calculations, data transformation, parsing spreadsheets, creating charts from data.
+- **supervisor**: General conversation, greetings, simple questions, multi-domain tasks that need coordination, or anything that doesn't clearly fit above.
+
+Rules:
+1. If the task involves CREATING/BUILDING an app, project, website, or writing code → coder
+2. If it involves opening a URL or interacting with a website → browser
+3. If it's about files on the computer (not creating code) → file
+4. If the user asks "what is X" or wants information → researcher
+5. If it involves analyzing data from files → data-analyst
+6. If unclear or simple chat → supervisor
+
+Respond with ONLY a JSON object, nothing else:
+{"agent": "<agent_name>", "confidence": <0.0-1.0>, "reason": "<brief reason>"}`;
+
+// LLM-based routing cache (avoid re-routing same messages)
+const routeCache: Map<string, { result: RouteResult; timestamp: number }> = new Map();
+const CACHE_TTL = 300_000; // 5 minutes
 
 /**
- * Route a message to the best specialist agent.
- * Returns the agent type, confidence score, and reasoning.
+ * Route a message using the LLM to classify intent.
+ * Falls back to simple heuristics if LLM fails.
  */
-export function routeMessage(message: string): RouteResult {
-  const msgLower = message.toLowerCase();
-  const scores: Record<AgentType, number> = {
-    browser: 0, file: 0, coder: 0, researcher: 0,
-    "data-analyst": 0, supervisor: 0,
-  };
-
-  // Score each agent
-  for (const [agentType, { keywords, patterns }] of Object.entries(ROUTE_PATTERNS)) {
-    if (agentType === "supervisor") continue;
-
-    // Keyword matching
-    for (const kw of keywords) {
-      if (msgLower.includes(kw.toLowerCase())) {
-        scores[agentType as AgentType] += 2;
-      }
-    }
-
-    // Pattern matching (higher weight)
-    for (const pattern of patterns) {
-      if (pattern.test(message)) {
-        scores[agentType as AgentType] += 5;
-      }
-    }
+export async function routeMessage(message: string): Promise<RouteResult> {
+  // Check cache first
+  const cacheKey = message.toLowerCase().trim();
+  const cached = routeCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.result;
   }
 
-  // Find the highest scoring agent
-  let bestAgent: AgentType = "supervisor";
-  let bestScore = 0;
-
-  for (const [agent, score] of Object.entries(scores)) {
-    if (score > bestScore) {
-      bestScore = score;
-      bestAgent = agent as AgentType;
+  try {
+    // Use the LLM for routing
+    const result = await llmRoute(message);
+    routeCache.set(cacheKey, { result, timestamp: Date.now() });
+    
+    // Cleanup old cache entries
+    if (routeCache.size > 200) {
+      const oldest = [...routeCache.entries()]
+        .sort((a, b) => a[1].timestamp - b[1].timestamp)
+        .slice(0, 50);
+      oldest.forEach(([key]) => routeCache.delete(key));
     }
+
+    return result;
+  } catch (err) {
+    console.error("[Router] LLM routing failed, using fallback:", err);
+    return fallbackRoute(message);
+  }
+}
+
+/**
+ * LLM-based routing — asks the model to classify the task.
+ */
+async function llmRoute(message: string): Promise<RouteResult> {
+  const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+  const { generateText } = await import("ai");
+
+  const provider = createOpenAICompatible({
+    name: "router",
+    baseURL: process.env.LLM_BASE_URL || "https://ollama.com/v1",
+    apiKey: process.env.LLM_API_KEY || "ollama",
+  });
+
+  const model = provider(process.env.LLM_MODEL || "gpt-oss:120b");
+
+  const { text } = await (generateText as any)({
+    model,
+    system: ROUTING_PROMPT,
+    prompt: `User message: "${message}"`,
+    maxTokens: 150,
+    temperature: 0,
+  });
+
+  // Parse JSON response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("No JSON in LLM response: " + text.slice(0, 200));
   }
 
-  // Confidence calculation
-  const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
-  const confidence = totalScore > 0 ? bestScore / totalScore : 0;
+  const parsed = JSON.parse(jsonMatch[0]);
+  const agent = VALID_AGENTS.includes(parsed.agent) ? parsed.agent : "supervisor";
+  const confidence = typeof parsed.confidence === "number" ? Math.min(1, Math.max(0, parsed.confidence)) : 0.8;
+  const reason = parsed.reason || "LLM classification";
 
-  // If confidence is too low or scores are close, use supervisor
-  if (bestScore < 3 || confidence < 0.4) {
-    return {
-      agent: "supervisor",
-      confidence: 1,
-      reason: "General task — supervisor handles directly",
-    };
+  return { agent, confidence, reason };
+}
+
+/**
+ * Fallback heuristic routing — used when LLM fails.
+ * Simple but reliable patterns.
+ */
+function fallbackRoute(message: string): RouteResult {
+  const m = message.toLowerCase();
+
+  // URL or domain detection
+  if (/https?:\/\/|www\.|\.com|\.org|\.net|\.io|\.in/.test(m) || /open\s+\w+\.(com|org|net|io|in)/.test(m)) {
+    return { agent: "browser", confidence: 0.9, reason: "URL/domain detected (fallback)" };
   }
 
-  const reasons: Record<AgentType, string> = {
-    browser: "Web browsing / website interaction detected",
-    file: "File or folder operation detected",
-    coder: "Programming / code task detected",
-    researcher: "Research / information lookup detected",
-    "data-analyst": "Data analysis / processing detected",
-    supervisor: "General task",
-  };
+  // Code/build patterns
+  if (/(?:banao|bana|create|build|make|write)\s+.*(?:app|project|website|script|code|program)/.test(m) ||
+      /(?:app|project|website|script)\s+(?:banao|bana|create|build)/.test(m) ||
+      /(?:git|npm|pip|python|javascript|typescript|html|react)/.test(m)) {
+    return { agent: "coder", confidence: 0.85, reason: "Code/build pattern (fallback)" };
+  }
 
-  return {
-    agent: bestAgent,
-    confidence: Math.round(confidence * 100) / 100,
-    reason: reasons[bestAgent],
-  };
+  // File patterns
+  if (/(?:file|folder|directory|desktop|downloads|documents)\s+(?:pe|mein|me|par|check|dikhao|list)/.test(m) ||
+      /\.(txt|pdf|csv|json|zip|doc|xls|jpg|png)/.test(m)) {
+    return { agent: "file", confidence: 0.85, reason: "File operation pattern (fallback)" };
+  }
+
+  // Data patterns
+  if (/(?:csv|data|analyze|statistics|calculate|parse)/.test(m)) {
+    return { agent: "data-analyst", confidence: 0.8, reason: "Data pattern (fallback)" };
+  }
+
+  // Research patterns
+  if (/(?:what is|who is|explain|tell me about|research|compare)/.test(m)) {
+    return { agent: "researcher", confidence: 0.75, reason: "Research pattern (fallback)" };
+  }
+
+  return { agent: "supervisor", confidence: 1, reason: "General task (fallback)" };
 }
 
 /**
