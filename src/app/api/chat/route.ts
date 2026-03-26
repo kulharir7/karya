@@ -30,6 +30,10 @@ const TOOL_NAME_MAP: Record<string, string> = {
   browserAgentTool: "browser-agent",
   batchRenameTool: "file-batch-rename",
   fileSizeTool: "file-size-info",
+  dateTimeTool: "system-datetime",
+  processListTool: "system-processes",
+  openAppTool: "system-open-app",
+  killProcessTool: "system-kill-process",
 };
 
 function resolveToolName(raw: string): string {

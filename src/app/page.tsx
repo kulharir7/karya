@@ -5,6 +5,7 @@ import Link from "next/link";
 import { saveHistory, loadHistory, clearHistory } from "@/lib/storage";
 import ToolCard from "./components/ToolCard";
 import MessageContent from "./components/MessageContent";
+import CommandPalette from "./components/CommandPalette";
 
 interface Message {
   id: string;
@@ -23,7 +24,20 @@ export default function Home() {
     { toolName: string; args?: any; result?: any; status: "running" | "done" }[]
   >([]);
   const [taskCount, setTaskCount] = useState(0);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setCmdOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   useEffect(() => { const s = loadHistory(); if (s.length > 0) setMessages(s); }, []);
   useEffect(() => { if (messages.length > 0) saveHistory(messages); }, [messages]);
@@ -82,6 +96,13 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-[var(--bg-primary)]">
+      {/* Command Palette */}
+      <CommandPalette
+        open={cmdOpen}
+        onClose={() => setCmdOpen(false)}
+        onSelect={(action) => { setInput(action); setCmdOpen(false); }}
+      />
+
       {/* Sidebar */}
       <div className="w-56 bg-white border-r border-gray-200 flex flex-col shrink-0">
         {/* Logo */}
@@ -124,13 +145,30 @@ export default function Home() {
           <div className="px-3 mt-4 mb-1">
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Agent</span>
           </div>
+          <button onClick={() => setCmdOpen(true)} className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
+            🔍 <span className="flex-1 text-left">Command</span>
+            <kbd className="text-[9px] text-gray-400 bg-gray-100 px-1 py-0.5 rounded">⌘K</kbd>
+          </button>
           <Link href="/settings" className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
             ⚙️ <span>Settings</span>
           </Link>
         </div>
 
         {/* Bottom */}
-        <div className="px-4 py-3 border-t border-gray-100">
+        <div className="px-4 py-3 border-t border-gray-100 space-y-2">
+          <button
+            onClick={() => {
+              const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}] ${m.content}`).join("\n\n");
+              const blob = new Blob([text], { type: "text/plain" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = `karya-chat-${Date.now()}.txt`; a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="w-full text-left text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            📥 Export chat
+          </button>
           <div className="flex items-center gap-2 text-[10px] text-gray-400">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
             <span>v0.1.0</span>
@@ -252,7 +290,7 @@ export default function Home() {
             <div className="flex items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus-within:border-purple-400 focus-within:ring-2 focus-within:ring-purple-100 transition-all">
               <textarea
                 value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-                placeholder="Message Karya (Enter to send)"
+                placeholder="Message Karya... (Enter to send, Ctrl+K for commands)"
                 rows={1} disabled={isLoading}
                 className="flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none resize-none disabled:opacity-50"
                 style={{ minHeight: "24px", maxHeight: "100px" }}

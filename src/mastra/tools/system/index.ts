@@ -1,3 +1,4 @@
+export { dateTimeTool, processListTool, openAppTool, killProcessTool } from "./advanced";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { execSync } from "child_process";

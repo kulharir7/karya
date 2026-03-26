@@ -18,6 +18,7 @@ const TOOL_ICONS: Record<string, string> = {
   "file-batch-rename": "✏️", "file-size-info": "📏",
   "shell-execute": "💻", "system-info": "🖥️",
   "clipboard-read": "📋", "clipboard-write": "📝", "system-notify": "🔔",
+  "system-datetime": "🕐", "system-processes": "📊", "system-open-app": "🚀", "system-kill-process": "⛔",
 };
 
 function formatToolName(name: string): string {

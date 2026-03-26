@@ -21,6 +21,10 @@ import {
   clipboardReadTool,
   clipboardWriteTool,
   notifyTool,
+  dateTimeTool,
+  processListTool,
+  openAppTool,
+  killProcessTool,
 } from "../tools/system";
 import { webSearchTool } from "../tools/browser/search";
 
@@ -114,5 +118,9 @@ User: "MakeMyTrip pe Delhi to Mumbai flight check karo"
     clipboardReadTool,
     clipboardWriteTool,
     notifyTool,
+    dateTimeTool,
+    processListTool,
+    openAppTool,
+    killProcessTool,
   },
 });
