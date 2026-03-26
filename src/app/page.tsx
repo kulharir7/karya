@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { saveHistory, loadHistory, clearHistory } from "@/lib/storage";
 
 interface Message {
   id: string;
@@ -27,9 +28,27 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Load history on mount
+  useEffect(() => {
+    const saved = loadHistory();
+    if (saved.length > 0) setMessages(saved);
+  }, []);
+
+  // Save history on change
+  useEffect(() => {
+    if (messages.length > 0) saveHistory(messages);
+  }, [messages]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingText]);
+
+  const handleClear = () => {
+    setMessages([]);
+    setActions([]);
+    setTaskCount(0);
+    clearHistory();
+  };
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -194,12 +213,19 @@ export default function Home() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-500/20">
               ⚡
             </div>
-            <div>
+            <div className="flex-1">
               <h1 className="text-lg font-bold text-white">Karya</h1>
               <p className="text-xs text-[var(--text-secondary)]">
                 AI Computer Agent • {taskCount} tasks
               </p>
             </div>
+            <button
+              onClick={handleClear}
+              className="p-2 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-white transition-colors"
+              title="Clear chat"
+            >
+              🗑️
+            </button>
           </div>
         </div>
 

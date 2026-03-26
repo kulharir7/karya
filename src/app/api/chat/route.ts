@@ -8,7 +8,7 @@ async function getAgent() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, history = [] } = await req.json();
+    const { message, history = [], threadId = "default" } = await req.json();
 
     if (!message) {
       return new Response(JSON.stringify({ error: "Message is required" }), {
@@ -18,37 +18,54 @@ export async function POST(req: NextRequest) {
     }
 
     const agent = await getAgent();
-
-    const messages = [
-      ...history.slice(-10),
-      { role: "user" as const, content: message },
-    ];
-
-    // Try streaming first, fallback to generate
     const encoder = new TextEncoder();
+
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          const result = await agent.stream(messages);
+          // Try streaming
+          let fullText = "";
+          const toolCalls: any[] = [];
 
-          // Stream text chunks
-          for await (const chunk of result.textStream) {
-            if (chunk) {
-              const data = JSON.stringify({ type: "text", content: chunk });
+          try {
+            const result = await agent.stream(message);
+
+            for await (const chunk of result.textStream) {
+              if (chunk) {
+                fullText += chunk;
+                const data = JSON.stringify({ type: "text", content: chunk });
+                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              }
+            }
+          } catch (streamErr: any) {
+            // Fallback to generate
+            console.log("Stream fallback:", streamErr.message);
+
+            const messages = [
+              ...history.slice(-10),
+              { role: "user" as const, content: message },
+            ];
+
+            const result = await agent.generate(messages);
+            fullText = result.text || "";
+
+            if (fullText) {
+              const data = JSON.stringify({ type: "text", content: fullText });
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            }
+
+            const trs = (result as any)?.toolResults || [];
+            for (const t of trs) {
+              toolCalls.push({
+                name: t.toolName || "unknown",
+                input: t.args || {},
+                output: t.result || null,
+              });
             }
           }
 
-          // After stream completes, get full result for tool info
-          const fullResult = await result;
-          const toolResults = (fullResult as any)?.toolResults || [];
-          
-          if (toolResults.length > 0) {
-            const toolCalls = toolResults.map((t: any) => ({
-              name: t.toolName || t.name || "unknown",
-              input: t.args || t.input || {},
-              output: t.result || t.output || null,
-            }));
+          // Send tool calls if any
+          if (toolCalls.length > 0) {
             const toolData = JSON.stringify({ type: "tools", toolCalls });
             controller.enqueue(encoder.encode(`data: ${toolData}\n\n`));
           }
@@ -57,45 +74,16 @@ export async function POST(req: NextRequest) {
             encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
           );
           controller.close();
-        } catch (streamErr: any) {
-          console.error("Stream error, falling back to generate:", streamErr.message);
-
-          // Fallback to non-streaming generate
-          try {
-            const result = await agent.generate(messages);
-            const text = result.text || "";
-            
-            if (text) {
-              const data = JSON.stringify({ type: "text", content: text });
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-            }
-
-            const toolResults = (result as any)?.toolResults || [];
-            if (toolResults.length > 0) {
-              const toolCalls = toolResults.map((t: any) => ({
-                name: t.toolName || "unknown",
-                input: t.args || {},
-                output: t.result || null,
-              }));
-              const toolData = JSON.stringify({ type: "tools", toolCalls });
-              controller.enqueue(encoder.encode(`data: ${toolData}\n\n`));
-            }
-
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
-            );
-            controller.close();
-          } catch (genErr: any) {
-            const errData = JSON.stringify({
-              type: "error",
-              content: genErr.message || "Agent error",
-            });
-            controller.enqueue(encoder.encode(`data: ${errData}\n\n`));
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
-            );
-            controller.close();
-          }
+        } catch (err: any) {
+          const errData = JSON.stringify({
+            type: "error",
+            content: err.message || "Agent error",
+          });
+          controller.enqueue(encoder.encode(`data: ${errData}\n\n`));
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
+          );
+          controller.close();
         }
       },
     });
