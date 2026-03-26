@@ -222,16 +222,28 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="px-4 py-3 border-t border-gray-100 space-y-2">
-          <button onClick={() => {
-            const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}] ${m.content}`).join("\n\n");
-            const blob = new Blob([text], { type: "text/plain" });
-            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `karya-${Date.now()}.txt`; a.click();
-          }} className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors">📥 Export</button>
-          <div className="flex items-center gap-2 text-[10px] text-gray-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            <span>v0.1 • gpt-oss:120b • {taskCount} tasks</span>
+        <div className="px-3 py-3 border-t border-gray-100">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
+              <span className="text-[9px] text-white font-bold">K</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-medium text-gray-700 truncate">Karya v0.1</div>
+              <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                <span className="truncate">gpt-oss:120b</span>
+                <span>•</span>
+                <span>{taskCount} tasks</span>
+              </div>
+            </div>
           </div>
+          <button onClick={() => {
+            const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}]\n${m.content}`).join("\n\n---\n\n");
+            const blob = new Blob([text], { type: "text/plain" });
+            const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `karya-chat-${new Date().toISOString().slice(0,10)}.txt`; a.click();
+          }} className="w-full text-[10px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-md py-1.5 transition-all text-center">
+            📥 Export Chat
+          </button>
         </div>
       </div>
 
