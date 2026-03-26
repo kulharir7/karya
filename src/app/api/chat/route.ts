@@ -170,67 +170,50 @@ export async function POST(req: NextRequest) {
             streamOptions.toolsets = mcpToolsets;
           }
 
-          // === REAL-TIME STREAMING via fullStream ===
-          // fullStream gives interleaved tool-call, tool-result, and text-delta events
-          // So UI shows tools LIVE as they execute, not after everything is done
+          // === TRUE WORD-BY-WORD STREAMING ===
+          // textStream gives real token-by-token streaming
+          // steps gives tool calls after each agent step
           const streamResult = await agent.stream(contextMessages, streamOptions);
 
           let fullText = "";
           const allToolCalls: { toolName: string; args?: any; result?: any; status: string }[] = [];
-          const pendingTools: Map<string, { toolName: string; args: any }> = new Map();
 
-          const fullStream = (streamResult as any).fullStream;
-          for await (const event of fullStream) {
-            const e = event as any;
-            const p = e.payload || {};  // Mastra wraps all data in payload
-
-            // Text streaming — word by word to UI
-            if (e.type === "text-delta" && p.textDelta) {
-              fullText += p.textDelta;
-              send({ type: "text-delta", content: p.textDelta });
-            }
-
-            // Tool call START — show in UI immediately (amber spinner)
-            if (e.type === "tool-call") {
-              const rawName = p.toolName || "unknown";
-              const toolName = resolveToolName(rawName);
-              const toolCallId = p.toolCallId || `tc-${Date.now()}`;
-
-              pendingTools.set(toolCallId, { toolName, args: p.args || {} });
-              await eventBus.emit("tool:before_call", { toolName, args: p.args || {} });
-              send({ type: "tool-call", toolName, args: p.args || {} });
-            }
-
-            // Tool RESULT — update UI (green checkmark)
-            if (e.type === "tool-result") {
-              const toolCallId = p.toolCallId || "";
-              const pending = pendingTools.get(toolCallId);
-              const rawName = p.toolName || pending?.toolName || "unknown";
-              const toolName = resolveToolName(rawName);
-              const result = p.result || null;
-
-              send({ type: "tool-result", toolName, result });
-              await eventBus.emit("tool:after_call", { toolName, result });
-
-              allToolCalls.push({
-                toolName,
-                args: pending?.args || p.args || {},
-                result,
-                status: "done",
-              });
-              pendingTools.delete(toolCallId);
+          // Stream text word-by-word using textStream (proven to give individual tokens)
+          const textStream = (streamResult as any).textStream;
+          for await (const chunk of textStream) {
+            if (chunk) {
+              fullText += chunk;
+              send({ type: "text-delta", content: chunk });
             }
           }
 
-          // Fallback text
-          if (!fullText) {
-            try {
-              const text = await (streamResult as any).text;
-              if (text) {
-                fullText = text;
-                send({ type: "text-delta", content: text });
+          // After text stream ends, extract tool calls from steps
+          const steps = await (streamResult as any).steps;
+          if (steps && Array.isArray(steps)) {
+            for (const step of steps) {
+              const toolCalls = step?.toolCalls || [];
+              const toolResults = step?.toolResults || [];
+
+              for (let i = 0; i < toolCalls.length; i++) {
+                const tc = toolCalls[i];
+                const tr = toolResults[i];
+                const p = tc?.payload || tc || {};
+                const rp = tr?.payload || tr || {};
+
+                const rawName = p.toolName || (p as any).name || "unknown";
+                const toolName = resolveToolName(rawName);
+
+                await eventBus.emit("tool:before_call", { toolName, args: p.args || {} });
+                send({ type: "tool-call", toolName, args: p.args || {} });
+
+                if (tr) {
+                  const result = rp.result || null;
+                  send({ type: "tool-result", toolName, result });
+                  await eventBus.emit("tool:after_call", { toolName, result });
+                  allToolCalls.push({ toolName, args: p.args || {}, result, status: "done" });
+                }
               }
-            } catch {}
+            }
           }
 
           // Persist assistant message

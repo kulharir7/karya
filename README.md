@@ -1,70 +1,68 @@
-# ⚡ Karya — AI Computer Agent
+// Root README.md
 
-> **Bolo kya karna hai — Karya kar dega.**
+# SocialNet MVP
 
-Karya is an AI agent that **actually DOES things** on your computer — not just talks about them.
+A minimal social‑network web app built with **Next.js** (frontend) and **NestJS** (backend) using **PostgreSQL**.
 
-![Karya Screenshot](https://img.shields.io/badge/Status-Active-brightgreen) ![Tools](https://img.shields.io/badge/Tools-26-purple) ![License](https://img.shields.io/badge/License-MIT-blue)
-
-## Features
-
-- 🌐 **Browser Automation** — Navigate, click, fill forms, extract data, web search
-- 📁 **File Management** — Read, write, move, search, PDF extract, image resize, zip/unzip
-- 💻 **Shell Commands** — Execute PowerShell commands, scripts, git operations
-- 🖥️ **System Control** — Info, clipboard, processes, open/kill apps, notifications
-- 🔍 **Command Palette** — `Ctrl+K` for quick actions
-- 💬 **Multi-Session** — Multiple chat sessions with history
-- 📎 **File Upload** — Drag & drop files for agent to process
-- ⚙️ **Settings** — Switch models, configure API from UI
-- 📱 **PWA** — Install as desktop app
+## Features (MVP)
+- User registration & login (JWT)
+- Profile page (username, avatar)
+- Follow / unfollow users
+- Create simple text posts
+- Feed of posts from followed users
+- Like / comment (basic skeleton – endpoints ready)
 
 ## Tech Stack
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js 14 + TypeScript + Tailwind CSS |
+| Backend | NestJS (TypeScript) + TypeORM |
+| Database | PostgreSQL |
+| Auth | JWT (passport‑jwt) |
+| Containerisation | Docker + Docker‑Compose |
 
-| Component | Technology |
-|-----------|-----------|
-| Agent Framework | [Mastra](https://mastra.ai) |
-| Browser Automation | [Stagehand](https://stagehand.dev) v3 |
-| Frontend | Next.js 16 + React + Tailwind |
-| LLM | Ollama Cloud (any OpenAI-compatible) |
-| Memory | LibSQL (persistent) |
-| Streaming | Server-Sent Events |
-
-## Quick Start
-
+## Quick Start (Docker)
 ```bash
-git clone https://github.com/kulharir7/karya.git
-cd karya
+# clone repo (you already have it locally)
+docker compose up --build
+```
+The frontend will be available at `http://localhost:3000` and the API at `http://localhost:4000/api`.
+
+## Folder Structure
+```
+/socialnet-mvp
+├─ backend/          # NestJS API
+│   ├─ src/
+│   │   ├─ app.module.ts
+│   │   ├─ main.ts
+│   │   ├─ auth/      # Auth module (JWT)
+│   │   ├─ users/     # User entity, service, controller
+│   │   └─ posts/     # Post entity, service, controller
+│   └─ ormconfig.ts
+├─ frontend/         # Next.js app
+│   ├─ pages/
+│   │   ├─ index.tsx    # Feed page (protected)
+│   │   ├─ login.tsx    # Login / signup
+│   │   └─ profile/[id].tsx
+│   ├─ components/
+│   └─ lib/api.ts       # Wrapper for API calls
+├─ docker-compose.yml
+└─ README.md
+```
+
+## Development
+### Backend
+```bash
+cd backend
 npm install
-cp .env.example .env   # Edit with your API key
-npm run dev             # http://localhost:3000
+npm run start:dev   # runs on http://localhost:4000
 ```
-
-Or on Windows: double-click `START.bat`
-
-## 26 Tools
-
-| Category | Tools |
-|----------|-------|
-| 🌐 Browser (6) | navigate, act, extract, screenshot, web-search, browser-agent |
-| 📁 Files (9) | read, write, list, move, search, read-pdf, resize-image, zip, unzip, batch-rename, size-info |
-| 💻 Shell (1) | execute command |
-| 🖥️ System (10) | info, datetime, processes, open-app, kill-process, clipboard-read, clipboard-write, notify |
-
-## Pages
-
-| Route | Description |
-|-------|-------------|
-| `/` | Main chat interface |
-| `/settings` | Model selection, API config |
-| `/help` | All tools, shortcuts, examples |
-
-## Docker
-
+### Frontend
 ```bash
-docker build -t karya .
-docker run -p 3000:3000 --env-file .env karya
+cd frontend
+npm install
+npm run dev         # runs on http://localhost:3000
 ```
 
-## License
-
-MIT — Built by Ravi Kulhari
+---
+Feel free to extend the schema, add real‑time features (WebSocket/Socket.io) or image uploads later.
