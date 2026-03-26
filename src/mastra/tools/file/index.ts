@@ -1,3 +1,7 @@
+export { readPdfTool } from "./pdf";
+export { resizeImageTool } from "./image";
+export { zipFilesTool, unzipFilesTool } from "./archive";
+
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import * as fs from "fs";

@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "10mb",
     },
   },
-  serverExternalPackages: ["@browserbasehq/stagehand", "sharp"],
+  serverExternalPackages: ["@browserbasehq/stagehand", "sharp", "pdf-parse", "archiver", "unzipper"],
 };
 
 export default nextConfig;

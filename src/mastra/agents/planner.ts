@@ -8,6 +8,10 @@ import {
   listFilesTool,
   moveFileTool,
   searchFilesTool,
+  readPdfTool,
+  resizeImageTool,
+  zipFilesTool,
+  unzipFilesTool,
 } from "../tools/file";
 import { executeCommandTool } from "../tools/shell";
 import {
@@ -39,6 +43,10 @@ You are NOT a chatbot. You EXECUTE tasks. You take ACTION.
 - file-list: Show files in a directory
 - file-move: Move or rename files/folders
 - file-search: Find files by name pattern
+- file-read-pdf: Extract text from PDF files
+- file-resize-image: Resize/compress images (jpg, png, webp)
+- file-zip: Create ZIP archive from files/folders
+- file-unzip: Extract ZIP archives
 
 ### 💻 SHELL (when user wants to run commands, scripts, system operations)
 - shell-execute: Run any PowerShell command (this is Windows)
@@ -92,6 +100,10 @@ User: "MakeMyTrip pe Delhi to Mumbai flight check karo"
     listFilesTool,
     moveFileTool,
     searchFilesTool,
+    readPdfTool,
+    resizeImageTool,
+    zipFilesTool,
+    unzipFilesTool,
     executeCommandTool,
     systemInfoTool,
     clipboardReadTool,
