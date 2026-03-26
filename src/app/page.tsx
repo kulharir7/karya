@@ -417,11 +417,13 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto sidebar-scroll">
-          {/* ─── CHAT ─── */}
-          <SidebarSection title="CHAT" defaultOpen={true} action={
+        {/* Chat list — scrollable, takes remaining space */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2">
+            <span className="text-[11px] font-semibold text-[#5a5a72] uppercase tracking-[0.1em]">CHAT</span>
             <div onClick={newSession} className="text-[#4a4a5a] hover:text-purple-400 cursor-pointer transition-colors">{icons.plus}</div>
-          }>
+          </div>
+          <div className="flex-1 overflow-y-auto sidebar-scroll px-0">
             {sessions.map((s) => (
               <SidebarNavItem
                 key={s.id}
@@ -432,8 +434,11 @@ export default function Home() {
                 onDelete={s.id !== "default" ? () => delSession(s.id) : undefined}
               />
             ))}
-          </SidebarSection>
+          </div>
+        </div>
 
+        {/* Fixed bottom sections — never scroll away */}
+        <div className="shrink-0 border-t border-[#1e1e2a] overflow-y-auto sidebar-scroll" style={{ maxHeight: "45%" }}>
           {/* ─── CONTROL ─── */}
           <SidebarSection title="CONTROL" defaultOpen={true}>
             <SidebarNavLink icon={icons.dashboard} label="Overview" href="/dashboard" />
