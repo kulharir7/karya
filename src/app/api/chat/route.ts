@@ -169,59 +169,64 @@ export async function POST(req: NextRequest) {
             streamOptions.toolsets = mcpToolsets;
           }
 
-          // === TRUE STREAMING via agent.stream() ===
+          // === REAL-TIME STREAMING via fullStream ===
+          // fullStream gives interleaved tool-call, tool-result, and text-delta events
+          // So UI shows tools LIVE as they execute, not after everything is done
           const streamResult = await agent.stream(contextMessages, streamOptions);
 
           let fullText = "";
           const allToolCalls: { toolName: string; args?: any; result?: any; status: string }[] = [];
+          const pendingTools: Map<string, { toolName: string; args: any }> = new Map();
 
-          // Stream text token-by-token via textStream
-          const textStream = await streamResult.textStream;
-          for await (const chunk of textStream) {
-            if (chunk) {
-              fullText += chunk;
-              send({ type: "text-delta", content: chunk });
+          const fullStream = (streamResult as any).fullStream;
+          for await (const event of fullStream) {
+            const e = event as any;
+
+            // Text streaming — word by word to UI
+            if (e.type === "text-delta") {
+              fullText += e.textDelta;
+              send({ type: "text-delta", content: e.textDelta });
+            }
+
+            // Tool call START — show in UI immediately (amber spinner)
+            if (e.type === "tool-call") {
+              const rawName = e.toolName || "unknown";
+              const toolName = resolveToolName(rawName);
+              const toolCallId = e.toolCallId || `tc-${Date.now()}`;
+
+              pendingTools.set(toolCallId, { toolName, args: e.args || {} });
+              await eventBus.emit("tool:before_call", { toolName, args: e.args || {} });
+              send({ type: "tool-call", toolName, args: e.args || {} });
+            }
+
+            // Tool RESULT — update UI (green checkmark)
+            if (e.type === "tool-result") {
+              const toolCallId = e.toolCallId || "";
+              const pending = pendingTools.get(toolCallId);
+              const rawName = e.toolName || pending?.toolName || "unknown";
+              const toolName = resolveToolName(rawName);
+              const result = e.result || null;
+
+              send({ type: "tool-result", toolName, result });
+              await eventBus.emit("tool:after_call", { toolName, result });
+
+              allToolCalls.push({
+                toolName,
+                args: pending?.args || {},
+                result,
+                status: "done",
+              });
+              pendingTools.delete(toolCallId);
             }
           }
 
-          // After stream ends, get tool calls from steps
-          const steps = await streamResult.steps;
-          if (steps && Array.isArray(steps)) {
-            for (const step of steps) {
-              const toolCalls = step?.toolCalls || [];
-              const toolResults = step?.toolResults || [];
-
-              for (let i = 0; i < toolCalls.length; i++) {
-                const tc = toolCalls[i];
-                const tr = toolResults[i];
-                const tcPayload = tc?.payload || tc;
-                const trPayload = tr?.payload || tr;
-                const rawName = (tcPayload as any)?.toolName || (tcPayload as any)?.name || (tc as any)?.toolName || "unknown";
-                const toolName = resolveToolName(rawName);
-                const toolResult = trPayload?.result || null;
-
-                await eventBus.emit("tool:before_call", { toolName, args: tcPayload?.args || {} });
-                send({ type: "tool-call", toolName, args: tcPayload?.args || {} });
-
-                if (tr) {
-                  send({ type: "tool-result", toolName, result: toolResult });
-                  await eventBus.emit("tool:after_call", { toolName, result: toolResult });
-                }
-
-                allToolCalls.push({
-                  toolName, args: tcPayload?.args || {},
-                  result: toolResult, status: tr ? "done" : "error",
-                });
-              }
-            }
-          }
-
-          // Get final text if textStream was empty (fallback)
+          // Fallback text
           if (!fullText) {
             try {
-              fullText = await streamResult.text || "";
-              if (fullText) {
-                send({ type: "text-delta", content: fullText });
+              const text = await (streamResult as any).text;
+              if (text) {
+                fullText = text;
+                send({ type: "text-delta", content: text });
               }
             } catch {}
           }
