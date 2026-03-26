@@ -13,14 +13,14 @@ export const navigateTool = createTool({
     url: z.string(),
     title: z.string(),
   }),
-  execute: async ({ context }) => {
+  execute: async ({ url }) => {
     const stagehand = await getStagehand();
-    const page = stagehand.page;
-    await page.goto(context.url, { waitUntil: "domcontentloaded" });
+    const page = stagehand.context.pages()[0];
+    await page.goto(url, { waitUntil: "domcontentloaded" });
     const title = await page.title();
     return {
       success: true,
-      url: context.url,
+      url,
       title,
     };
   },

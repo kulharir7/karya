@@ -17,16 +17,15 @@ export const screenshotTool = createTool({
     success: z.boolean(),
     path: z.string(),
   }),
-  execute: async ({ context }) => {
+  execute: async ({ filename }) => {
     const stagehand = await getStagehand();
-    const page = stagehand.page;
-    const filename =
-      context.filename || `screenshot-${Date.now()}.png`;
+    const page = stagehand.context.pages()[0];
+    const fname = filename || `screenshot-${Date.now()}.png`;
     const screenshotDir = path.join(process.cwd(), "screenshots");
     if (!fs.existsSync(screenshotDir)) {
       fs.mkdirSync(screenshotDir, { recursive: true });
     }
-    const filePath = path.join(screenshotDir, filename);
+    const filePath = path.join(screenshotDir, fname);
     await page.screenshot({ path: filePath, fullPage: false });
     return {
       success: true,

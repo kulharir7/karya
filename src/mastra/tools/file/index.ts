@@ -14,13 +14,13 @@ export const readFileTool = createTool({
     content: z.string(),
     size: z.number(),
   }),
-  execute: async ({ context }) => {
-    const resolved = path.resolve(context.filePath);
+  execute: async ({ filePath }) => {
+    const resolved = path.resolve(filePath);
     const content = fs.readFileSync(resolved, "utf-8");
     const stats = fs.statSync(resolved);
     return {
       success: true,
-      content: content.slice(0, 50000), // Limit to 50KB
+      content: content.slice(0, 50000),
       size: stats.size,
     };
   },
@@ -38,13 +38,13 @@ export const writeFileTool = createTool({
     path: z.string(),
     size: z.number(),
   }),
-  execute: async ({ context }) => {
-    const resolved = path.resolve(context.filePath);
+  execute: async ({ filePath, content }) => {
+    const resolved = path.resolve(filePath);
     const dir = path.dirname(resolved);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(resolved, context.content, "utf-8");
+    fs.writeFileSync(resolved, content, "utf-8");
     const stats = fs.statSync(resolved);
     return {
       success: true,
@@ -59,15 +59,14 @@ export const listFilesTool = createTool({
   description: "List files and folders in a directory.",
   inputSchema: z.object({
     dirPath: z.string().describe("Path to the directory to list"),
-    recursive: z.boolean().optional().describe("Whether to list recursively (default: false)"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
     files: z.array(z.string()),
     count: z.number(),
   }),
-  execute: async ({ context }) => {
-    const resolved = path.resolve(context.dirPath);
+  execute: async ({ dirPath }) => {
+    const resolved = path.resolve(dirPath);
     const entries = fs.readdirSync(resolved, { withFileTypes: true });
     const files = entries.map((e) => {
       const prefix = e.isDirectory() ? "📁 " : "📄 ";
@@ -93,9 +92,9 @@ export const moveFileTool = createTool({
     from: z.string(),
     to: z.string(),
   }),
-  execute: async ({ context }) => {
-    const src = path.resolve(context.source);
-    const dest = path.resolve(context.destination);
+  execute: async ({ source, destination }) => {
+    const src = path.resolve(source);
+    const dest = path.resolve(destination);
     const destDir = path.dirname(dest);
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });
@@ -121,20 +120,24 @@ export const searchFilesTool = createTool({
     matches: z.array(z.string()),
     count: z.number(),
   }),
-  execute: async ({ context }) => {
-    const resolved = path.resolve(context.dirPath);
+  execute: async ({ dirPath, pattern }) => {
+    const resolved = path.resolve(dirPath);
     const matches: string[] = [];
-    const searchPattern = context.pattern.toLowerCase().replace(/\*/g, "");
+    const searchPattern = pattern.toLowerCase().replace(/\*/g, "");
 
     function walk(dir: string) {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(fullPath);
-        } else if (entry.name.toLowerCase().includes(searchPattern)) {
-          matches.push(fullPath);
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            walk(fullPath);
+          } else if (entry.name.toLowerCase().includes(searchPattern)) {
+            matches.push(fullPath);
+          }
         }
+      } catch {
+        // Skip inaccessible directories
       }
     }
 

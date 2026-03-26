@@ -17,12 +17,12 @@ export const actTool = createTool({
     success: z.boolean(),
     message: z.string(),
   }),
-  execute: async ({ context }) => {
+  execute: async ({ action }) => {
     const stagehand = await getStagehand();
-    const result = await stagehand.act({ action: context.action });
+    await stagehand.act(action);
     return {
       success: true,
-      message: `Action performed: ${context.action}`,
+      message: `Action performed: ${action}`,
     };
   },
 });

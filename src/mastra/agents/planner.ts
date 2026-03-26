@@ -17,6 +17,7 @@ import {
 } from "../tools/system";
 
 export const plannerAgent = new Agent({
+  id: "karya",
   name: "Karya",
   instructions: `You are KARYA — an AI Computer Agent that DOES real things on the user's computer.
 You are NOT a chatbot. You EXECUTE tasks. You take ACTION.

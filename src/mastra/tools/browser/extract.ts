@@ -17,14 +17,9 @@ export const extractTool = createTool({
     success: z.boolean(),
     data: z.string(),
   }),
-  execute: async ({ context }) => {
+  execute: async ({ instruction }) => {
     const stagehand = await getStagehand();
-    const result = await stagehand.extract({
-      instruction: context.instruction,
-      schema: z.object({
-        extracted: z.string().describe("The extracted data"),
-      }),
-    });
+    const result = await stagehand.extract(instruction);
     return {
       success: true,
       data: JSON.stringify(result, null, 2),

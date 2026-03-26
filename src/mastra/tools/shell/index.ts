@@ -16,13 +16,13 @@ export const executeCommandTool = createTool({
     output: z.string(),
     exitCode: z.number(),
   }),
-  execute: async ({ context }) => {
+  execute: async ({ command, cwd }) => {
     try {
-      const output = execSync(context.command, {
-        cwd: context.cwd || process.cwd(),
+      const output = execSync(command, {
+        cwd: cwd || process.cwd(),
         encoding: "utf-8",
         timeout: 30000,
-        maxBuffer: 1024 * 1024 * 10, // 10MB
+        maxBuffer: 1024 * 1024 * 10,
         shell: "powershell.exe",
       });
       return {

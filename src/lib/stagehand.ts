@@ -6,11 +6,13 @@ export async function getStagehand(): Promise<Stagehand> {
   if (!stagehandInstance) {
     stagehandInstance = new Stagehand({
       env: "LOCAL",
-      headless: false,
       verbose: 1,
-      enableCaching: true,
-      modelName: "gpt-4o", // Stagehand's internal vision model
-      modelClientOptions: {
+      localBrowserLaunchOptions: {
+        headless: false,
+      },
+      model: {
+        modelName: "gpt-4o",
+        provider: "openai",
         apiKey: process.env.LLM_API_KEY || "ollama",
         baseURL: process.env.LLM_BASE_URL || "https://ollama.com/v1",
       },

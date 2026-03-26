@@ -9,6 +9,7 @@ import {
 } from "../tools/file";
 
 export const fileAgent = new Agent({
+  id: "file-agent",
   name: "Karya File Agent",
   instructions: `You are Karya's File Agent. You manage files and folders on the user's computer.
 

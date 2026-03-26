@@ -3,6 +3,7 @@ import { getModel } from "@/lib/llm";
 import { navigateTool, actTool, extractTool, screenshotTool } from "../tools/browser";
 
 export const browserAgent = new Agent({
+  id: "browser-agent",
   name: "Karya Browser Agent",
   instructions: `You are Karya's Browser Agent. You control a real web browser to perform tasks.
 
