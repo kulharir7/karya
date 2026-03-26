@@ -62,9 +62,13 @@ For every task, think step by step:
 ### 💻 CODE (programming)
 - code-write: Write code to a file
 - code-execute: Run JavaScript/TypeScript code directly
+- code-analyze: Analyze code files (language, functions, imports, preview)
 
 ### 📊 DATA (data operations)
 - api-call: Make HTTP requests to any API
+- data-csv-parse: Parse CSV files into structured data
+- data-json-query: Read JSON files with dot-notation queries
+- data-transform: Transform data between formats using JavaScript
 
 ### 🖥️ SYSTEM
 - system-info: OS/CPU/RAM
