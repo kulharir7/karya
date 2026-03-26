@@ -9,6 +9,7 @@ import {
   createSession,
   renameSession,
 } from "@/lib/session-manager";
+import { eventBus } from "@/lib/event-bus";
 
 // Cache MCP tools for 60 seconds
 let mcpToolsCache: { tools: Record<string, any>; timestamp: number } = { tools: {}, timestamp: 0 };
@@ -103,6 +104,9 @@ export async function POST(req: NextRequest) {
       timestamp: Date.now(),
     });
 
+    // Emit lifecycle events
+    await eventBus.emit("message:received", { sessionId, message, timestamp: Date.now() });
+
     // Load recent messages from DB for context
     const recentMessages = await getRecentMessages(sessionId, 20);
     const contextMessages: any[] = recentMessages.map((m) => ({
@@ -134,6 +138,7 @@ export async function POST(req: NextRequest) {
 
         // Send session ID back to client (for new sessions)
         send({ type: "session", sessionId });
+        await eventBus.emit("agent:start", { sessionId, message });
 
         try {
           const generateOptions: any = {};
@@ -161,11 +166,13 @@ export async function POST(req: NextRequest) {
               const rawName = tcPayload?.toolName || tcPayload?.name || tc?.toolName || "unknown";
               const toolName = resolveToolName(rawName);
 
+              await eventBus.emit("tool:before_call", { toolName, args: tcPayload?.args || {} });
               send({ type: "tool-call", toolName, args: tcPayload?.args || {} });
 
               const toolResult = trPayload?.result || null;
               if (tr) {
                 send({ type: "tool-result", toolName, result: toolResult });
+                await eventBus.emit("tool:after_call", { toolName, result: toolResult });
               }
 
               allToolCalls.push({
@@ -205,10 +212,14 @@ export async function POST(req: NextRequest) {
             timestamp: Date.now(),
           });
 
+          await eventBus.emit("agent:end", { sessionId, toolCount: allToolCalls.length, textLength: text.length });
+          await eventBus.emit("message:sent", { sessionId, content: text });
+
           send({ type: "done" });
           controller.close();
         } catch (err: any) {
           console.error("Agent error:", err.message);
+          await eventBus.emit("agent:error", { sessionId, error: err.message });
 
           // Persist error message
           await addMessage(sessionId, {
