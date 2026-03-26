@@ -38,6 +38,9 @@ import {
   memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
 } from "../tools/memory";
 
+// Scheduler tools
+import { scheduleTaskTool, listTasksTool, cancelTaskTool } from "../tools/scheduler";
+
 /**
  * Karya MCP Server — exposes ALL 32 tools to external MCP clients.
  * 
@@ -108,6 +111,11 @@ export function createKaryaMCPServer() {
       memoryWriteTool,
       memoryLogTool,
       memoryListTool,
+
+      // === Scheduler (3) ===
+      scheduleTaskTool,
+      listTasksTool,
+      cancelTaskTool,
     },
   });
 }

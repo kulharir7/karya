@@ -18,6 +18,7 @@ import { apiCallTool, csvParseTool, jsonQueryTool, dataTransformTool } from "../
 import {
   memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
 } from "../tools/memory";
+import { scheduleTaskTool, listTasksTool, cancelTaskTool } from "../tools/scheduler";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -79,6 +80,11 @@ For every task, think step by step:
 - memory-write: Write/update a memory file
 - memory-log: Append to today's daily log (auto-timestamped)
 - memory-list: List all memory files
+
+### ⏰ SCHEDULER (automated tasks)
+- task-schedule: Create recurring or one-shot tasks (hourly/daily/weekly/once)
+- task-list: List all scheduled tasks with status
+- task-cancel: Cancel a scheduled task
 
 ### 🖥️ SYSTEM
 - system-info: OS/CPU/RAM
@@ -145,5 +151,7 @@ Example: "Download all images from this website and resize them"
     dateTimeTool, processListTool, openAppTool, killProcessTool,
     // Memory
     memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
+    // Scheduler
+    scheduleTaskTool, listTasksTool, cancelTaskTool,
   },
 });

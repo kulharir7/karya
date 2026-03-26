@@ -76,6 +76,9 @@ const TOOL_NAME_MAP: Record<string, string> = {
   memoryWriteTool: "memory-write",
   memoryLogTool: "memory-log",
   memoryListTool: "memory-list",
+  scheduleTaskTool: "task-schedule",
+  listTasksTool: "task-list",
+  cancelTaskTool: "task-cancel",
 };
 
 function resolveToolName(raw: string): string {
