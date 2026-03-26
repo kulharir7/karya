@@ -3,24 +3,23 @@
 :root {
   --bg-primary: #f8f9fa;
   --bg-secondary: #ffffff;
-  --bg-sidebar: #fafafa;
   --bg-hover: #f0f0f0;
-  --bg-tool: #fef9ef;
-  --bg-tool-border: #fde68a;
-  --bg-input: #f5f5f5;
   --text-primary: #1a1a1a;
   --text-secondary: #6b7280;
   --text-muted: #9ca3af;
   --accent: #7c3aed;
-  --accent-light: #ede9fe;
   --border: #e5e7eb;
-  --border-light: #f0f0f0;
-  --user-bubble: #7c3aed;
-  --tool-accent: #f59e0b;
 }
 
-* {
-  box-sizing: border-box;
+.dark {
+  --bg-primary: #0f0f17;
+  --bg-secondary: #16161f;
+  --bg-hover: #1e1e2a;
+  --text-primary: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --accent: #8b5cf6;
+  --border: #27272a;
 }
 
 body {
@@ -30,13 +29,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+.dark ::-webkit-scrollbar-thumb { background: #3f3f46; }
 
-/* Animations */
 @keyframes thinking {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 1; }
@@ -44,8 +41,3 @@ body {
 .animate-thinking span:nth-child(1) { animation: thinking 1.4s infinite 0s; }
 .animate-thinking span:nth-child(2) { animation: thinking 1.4s infinite 0.2s; }
 .animate-thinking span:nth-child(3) { animation: thinking 1.4s infinite 0.4s; }
-
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}

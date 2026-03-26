@@ -8,7 +8,7 @@ import CommandPalette from "./components/CommandPalette";
 import {
   getSessions, saveSessions, getActiveSessionId, setActiveSessionId,
   getSessionMessages, saveSessionMessages, createSession, deleteSession,
-  type Session,
+  renameSession, type Session,
 } from "@/lib/sessions";
 
 interface Message {
@@ -32,7 +32,37 @@ export default function Home() {
   const [taskCount, setTaskCount] = useState(0);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [dark, setDark] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Dark mode
+  useEffect(() => {
+    const saved = localStorage.getItem("karya-dark") === "true";
+    setDark(saved);
+    document.documentElement.classList.toggle("dark", saved);
+  }, []);
+
+  const toggleDark = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("karya-dark", String(next));
+  };
+
+  // Scroll detection
+  useEffect(() => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const handler = () => {
+      const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollBtn(fromBottom > 200);
+    };
+    el.addEventListener("scroll", handler);
+    return () => el.removeEventListener("scroll", handler);
+  }, []);
 
   // Load sessions
   useEffect(() => {
@@ -146,13 +176,24 @@ export default function Home() {
         }
       }
 
-      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: fullText || "✅ Done.", timestamp: Date.now(), toolCalls: tools.map((t) => ({ ...t })) }]);
+      setMessages((prev) => {
+        const updated = [...prev, { id: (Date.now() + 1).toString(), role: "assistant" as const, content: fullText || "✅ Done.", timestamp: Date.now(), toolCalls: tools.map((t) => ({ ...t })) }];
+        // Auto-rename session from first user message
+        if (prev.length <= 2) {
+          const firstUser = prev.find((m) => m.role === "user");
+          if (firstUser) {
+            renameSession(activeId, firstUser.content.slice(0, 25) + (firstUser.content.length > 25 ? "..." : ""));
+            setSessions(getSessions());
+          }
+        }
+        return updated;
+      });
       setStreamingText(""); setStreamingTools([]);
     } catch (err: any) {
       setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: `❌ ${err.message}`, timestamp: Date.now() }]);
       setStreamingText(""); setStreamingTools([]);
     } finally { setIsLoading(false); }
-  }, [input, isLoading, messages]);
+  }, [input, isLoading, messages, activeId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } };
 
@@ -224,9 +265,14 @@ export default function Home() {
         </div>
       )}
 
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/20 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <div className="w-56 bg-white border-r border-gray-200 flex flex-col shrink-0">
-        <div className="px-4 py-3 border-b border-gray-100">
+      <div className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 fixed md:static z-40 w-56 bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col shrink-0 h-full transition-transform duration-200`}>
+        <div className="px-4 py-3 border-b border-[var(--border)]">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-xs shadow-sm">⚡</div>
             <div className="flex-1 min-w-0">
@@ -296,21 +342,27 @@ export default function Home() {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="h-11 bg-white border-b border-gray-200 flex items-center px-5 shrink-0">
-          <div className="flex items-center gap-2 text-sm flex-1">
-            <span className="text-gray-300">Karya ›</span>
-            <span className="font-medium text-gray-800">{currentSession?.name || "Chat"}</span>
+        <div className="h-11 bg-[var(--bg-secondary)] border-b border-[var(--border)] flex items-center px-4 shrink-0">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden mr-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]">☰</button>
+          <div className="flex items-center gap-2 text-sm flex-1 min-w-0">
+            <span className="text-[var(--text-muted)]">Karya ›</span>
+            <span className="font-medium text-[var(--text-primary)] truncate">{currentSession?.name || "Chat"}</span>
           </div>
-          {isLoading && (
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
-              <span className="text-xs text-purple-600">Working...</span>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {isLoading && (
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+                <span className="text-xs text-purple-600">Working...</span>
+              </div>
+            )}
+            <button onClick={toggleDark} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors" title="Toggle dark mode">
+              {dark ? "☀️" : "🌙"}
+            </button>
+          </div>
         </div>
 
         {/* Chat */}
-        <div className="flex-1 overflow-y-auto bg-[var(--bg-primary)]">
+        <div ref={chatContainerRef} className="flex-1 overflow-y-auto bg-[var(--bg-primary)] relative">
           {messages.length === 0 && !streamingText ? (
             <div className="flex flex-col items-center justify-center h-full px-6">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-xl mb-4 shadow-md">⚡</div>
@@ -383,8 +435,20 @@ export default function Home() {
           )}
         </div>
 
+        {/* Scroll to bottom */}
+        {showScrollBtn && (
+          <div className="flex justify-center -mt-10 relative z-10">
+            <button
+              onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })}
+              className="bg-[var(--bg-secondary)] border border-[var(--border)] shadow-lg rounded-full px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
+            >
+              ↓ Scroll to bottom
+            </button>
+          </div>
+        )}
+
         {/* Input */}
-        <div className="border-t border-gray-200 bg-white p-3 shrink-0">
+        <div className="border-t border-[var(--border)] bg-[var(--bg-secondary)] p-3 shrink-0">
           <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
             <div className="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus-within:border-purple-400 focus-within:ring-2 focus-within:ring-purple-100 transition-all">
               <label className="cursor-pointer text-gray-400 hover:text-gray-600 transition-colors shrink-0 pb-0.5">

@@ -60,3 +60,10 @@ export function createSession(name?: string): Session {
   setActiveSessionId(id);
   return session;
 }
+
+export function renameSession(sessionId: string, name: string) {
+  const sessions = getSessions().map((s) =>
+    s.id === sessionId ? { ...s, name: name.slice(0, 30) } : s
+  );
+  saveSessions(sessions);
+}
