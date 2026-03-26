@@ -502,6 +502,30 @@ export default function Home() {
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+            {/* Clear current chat */}
+            <button
+              onClick={async () => {
+                if (!confirm("Clear all messages in this chat?")) return;
+                await fetch("/api/sessions", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "clear", id: activeId }),
+                });
+                setMessages([]);
+              }}
+              className="px-2 py-1 rounded-lg text-[10px] text-[var(--text-muted)] hover:text-red-400 hover:bg-red-50 transition-colors"
+              title="Clear chat"
+            >🗑️</button>
+            {/* Delete current chat */}
+            <button
+              onClick={async () => {
+                if (activeId === "default") return alert("Cannot delete default session");
+                if (!confirm("Delete this chat permanently?")) return;
+                await delSession(activeId);
+              }}
+              className="px-2 py-1 rounded-lg text-[10px] text-[var(--text-muted)] hover:text-red-400 hover:bg-red-50 transition-colors"
+              title="Delete chat"
+            >✕</button>
             <button
               onClick={newSession}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors shadow-sm"

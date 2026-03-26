@@ -241,6 +241,18 @@ export function getWorkspaceContext(): string {
 
   const parts: string[] = [];
 
+  // Soul (who the agent is)
+  const soul = readWorkspaceFile("SOUL.md");
+  if (soul.trim()) {
+    parts.push(soul);
+  }
+
+  // Agents (workspace instructions)
+  const agents = readWorkspaceFile("AGENTS.md");
+  if (agents.trim()) {
+    parts.push(agents);
+  }
+
   // Rules
   const rules = readWorkspaceFile("RULES.md");
   if (rules.trim()) {
@@ -250,16 +262,21 @@ export function getWorkspaceContext(): string {
   // Long-term memory (summarized)
   const memory = readLongTermMemory();
   if (memory.trim()) {
-    // Only include first 2000 chars to save context
     const truncated = memory.length > 2000 ? memory.slice(0, 2000) + "\n...(truncated)" : memory;
     parts.push(`## Long-Term Memory\n${truncated}`);
   }
 
-  // Today's log
+  // Today's log (recent context)
   const todayLog = readTodayLog();
   if (todayLog.trim()) {
-    const truncated = todayLog.length > 1000 ? todayLog.slice(0, 1000) + "\n...(truncated)" : todayLog;
-    parts.push(`## Today's Notes\n${truncated}`);
+    const truncated = todayLog.length > 1500 ? todayLog.slice(-1500) + "\n...(showing recent)" : todayLog;
+    parts.push(`## Today's Activity Log\n${truncated}`);
+  }
+
+  // User info
+  const user = readWorkspaceFile("USER.md");
+  if (user.trim()) {
+    parts.push(user);
   }
 
   return parts.join("\n\n---\n\n");
