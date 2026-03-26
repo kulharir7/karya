@@ -41,6 +41,12 @@ import {
 // Scheduler tools
 import { scheduleTaskTool, listTasksTool, cancelTaskTool } from "../tools/scheduler";
 
+// Agent delegation tools (Supervisor Pattern)
+import {
+  delegateToBrowserAgent, delegateToFileAgent, delegateToCoderAgent,
+  delegateToResearcherAgent, delegateToDataAnalystAgent,
+} from "../tools/agents";
+
 /**
  * Karya MCP Server — exposes ALL 32 tools to external MCP clients.
  * 
@@ -116,6 +122,13 @@ export function createKaryaMCPServer() {
       scheduleTaskTool,
       listTasksTool,
       cancelTaskTool,
+
+      // === Agent Delegation (5) ===
+      delegateToBrowserAgent,
+      delegateToFileAgent,
+      delegateToCoderAgent,
+      delegateToResearcherAgent,
+      delegateToDataAnalystAgent,
     },
   });
 }
