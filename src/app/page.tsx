@@ -9,67 +9,90 @@ import CommandPalette from "./components/CommandPalette";
 
 // ─── Sidebar Components (OpenClaw-style) ───
 
+// ─── SVG Icons (OpenClaw-style line icons) ───
+const icons = {
+  chat: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
+  plus: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>,
+  dashboard: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
+  search: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
+  memory: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 014 4v1a1 1 0 001 1h1a4 4 0 010 8h-1a1 1 0 00-1 1v1a4 4 0 01-8 0v-1a1 1 0 00-1-1H6a4 4 0 010-8h1a1 1 0 001-1V6a4 4 0 014-4z"/></svg>,
+  sessions: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>,
+  events: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>,
+  agents: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 00-16 0"/></svg>,
+  mcp: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>,
+  tools: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>,
+  settings: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
+  help: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5"/></svg>,
+  export: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>,
+  automation: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>,
+  debug: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 8v4M12 16h.01"/></svg>,
+  logs: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>,
+  chevron: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>,
+};
+
 function SidebarSection({ title, children, defaultOpen = true, action }: {
   title: string; children: React.ReactNode; defaultOpen?: boolean; action?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="mt-1">
-      <div className="w-full flex items-center justify-between px-4 py-2 group">
-        <div
-          onClick={() => setOpen(!open)}
-          className="flex items-center gap-1.5 cursor-pointer flex-1"
-        >
-          <svg
-            className={`w-3 h-3 text-[#3a3a4a] transition-transform duration-200 ${open ? "" : "-rotate-90"}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-          <span className="text-[10px] font-semibold text-[#5a5a72] uppercase tracking-[0.08em] select-none">{title}</span>
+    <div className="mt-2 first:mt-0">
+      <div className="flex items-center justify-between px-4 py-2">
+        <div onClick={() => setOpen(!open)} className="flex items-center gap-0 cursor-pointer flex-1 select-none">
+          <span className="text-[11px] font-semibold text-[#5a5a72] uppercase tracking-[0.1em]">{title}</span>
         </div>
-        {action && <div>{action}</div>}
+        <div className="flex items-center gap-1">
+          {action}
+          <div onClick={() => setOpen(!open)} className="cursor-pointer text-[#3a3a4a] hover:text-[#6a6a7a] transition-colors">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+              className={`transition-transform duration-200 ${open ? "" : "-rotate-90"}`}>
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </div>
+        </div>
       </div>
-      {open && <div className="pb-1">{children}</div>}
+      {open && <div className="space-y-[1px]">{children}</div>}
     </div>
   );
 }
 
-function SidebarItem({ icon, label, active, onClick, onDelete, badge }: {
-  icon: string; label: string; active?: boolean; onClick?: () => void; onDelete?: () => void; badge?: string;
+function SidebarNavItem({ icon, label, active, onClick, onDelete, badge }: {
+  icon: React.ReactNode; label: string; active?: boolean; onClick?: () => void; onDelete?: () => void; badge?: string;
 }) {
   return (
-    <button
+    <div
       onClick={onClick}
-      className={`group w-full flex items-center gap-2.5 px-4 py-[7px] text-[13px] transition-all duration-150 ${
+      className={`group flex items-center gap-3 mx-2 px-3 py-[7px] rounded-lg cursor-pointer transition-all duration-150 ${
         active
-          ? "text-white bg-[#1a1a28] border-l-2 border-purple-500 pl-[14px]"
-          : "text-[#8e8ea0] hover:text-[#c4c4d4] hover:bg-[#16161f] border-l-2 border-transparent pl-[14px]"
+          ? "bg-[#1e1e2e] text-white"
+          : "text-[#8e8ea0] hover:text-[#c4c4d4] hover:bg-[#141420]"
       }`}
     >
-      <span className="text-sm shrink-0 w-5 text-center">{icon}</span>
-      <span className="flex-1 text-left truncate">{label}</span>
+      <span className={`shrink-0 ${active ? "text-white" : "text-[#5a5a72] group-hover:text-[#8e8ea0]"}`}>{icon}</span>
+      <span className="flex-1 text-[13px] truncate">{label}</span>
       {badge && (
-        <kbd className="text-[9px] text-[#4a4a5a] bg-[#1a1a28] px-1.5 py-0.5 rounded font-mono">{badge}</kbd>
+        <kbd className="text-[10px] text-[#4a4a5a] bg-[#0f0f14] px-1.5 py-0.5 rounded font-mono border border-[#1e1e2a]">{badge}</kbd>
       )}
       {onDelete && (
         <span
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="opacity-0 group-hover:opacity-100 text-[#4a4a5a] hover:text-red-400 text-xs transition-opacity cursor-pointer"
+          className="opacity-0 group-hover:opacity-100 text-[#4a4a5a] hover:text-red-400 text-[10px] transition-opacity"
         >✕</span>
       )}
-    </button>
+    </div>
   );
 }
 
-function SidebarLink({ icon, label, href }: { icon: string; label: string; href: string }) {
+function SidebarNavLink({ icon, label, href, active }: { icon: React.ReactNode; label: string; href: string; active?: boolean }) {
   return (
-    <Link
-      href={href}
-      className="group flex items-center gap-2.5 px-4 py-[7px] text-[13px] text-[#8e8ea0] hover:text-[#c4c4d4] hover:bg-[#16161f] border-l-2 border-transparent pl-[14px] transition-all duration-150"
+    <Link href={href}
+      className={`group flex items-center gap-3 mx-2 px-3 py-[7px] rounded-lg transition-all duration-150 ${
+        active
+          ? "bg-[#1e1e2e] text-white"
+          : "text-[#8e8ea0] hover:text-[#c4c4d4] hover:bg-[#141420]"
+      }`}
     >
-      <span className="text-sm shrink-0 w-5 text-center">{icon}</span>
-      <span className="flex-1 text-left truncate">{label}</span>
+      <span className={`shrink-0 ${active ? "text-white" : "text-[#5a5a72] group-hover:text-[#8e8ea0]"}`}>{icon}</span>
+      <span className="flex-1 text-[13px] truncate">{label}</span>
     </Link>
   );
 }
@@ -395,14 +418,14 @@ export default function Home() {
         </div>
 
         <div className="flex-1 overflow-y-auto sidebar-scroll">
-          {/* ─── CHAT Section ─── */}
+          {/* ─── CHAT ─── */}
           <SidebarSection title="CHAT" defaultOpen={true} action={
-            <button onClick={newSession} className="text-[10px] text-purple-400 hover:text-purple-300 font-medium transition-colors">+ New</button>
+            <div onClick={newSession} className="text-[#4a4a5a] hover:text-purple-400 cursor-pointer transition-colors">{icons.plus}</div>
           }>
             {sessions.map((s) => (
-              <SidebarItem
+              <SidebarNavItem
                 key={s.id}
-                icon="💬"
+                icon={icons.chat}
                 label={s.name}
                 active={s.id === activeId}
                 onClick={() => switchSession(s.id)}
@@ -411,27 +434,29 @@ export default function Home() {
             ))}
           </SidebarSection>
 
-          {/* ─── CONTROL Section ─── */}
+          {/* ─── CONTROL ─── */}
           <SidebarSection title="CONTROL" defaultOpen={true}>
-            <SidebarLink icon="📊" label="Overview" href="/dashboard" />
-            <SidebarItem icon="🔍" label="Command" onClick={() => setCmdOpen(true)} badge="⌘K" />
-            <SidebarLink icon="🧠" label="Memory" href="/api/memory?action=list" />
-            <SidebarLink icon="📋" label="Sessions" href="/api/sessions" />
-            <SidebarLink icon="📡" label="Events" href="/api/events" />
+            <SidebarNavLink icon={icons.dashboard} label="Overview" href="/dashboard" />
+            <SidebarNavItem icon={icons.search} label="Command" onClick={() => setCmdOpen(true)} badge="⌘K" />
+            <SidebarNavLink icon={icons.memory} label="Memory" href="/api/memory?action=list" />
+            <SidebarNavLink icon={icons.events} label="Events" href="/api/events" />
           </SidebarSection>
 
-          {/* ─── AGENT Section ─── */}
+          {/* ─── AGENT ─── */}
           <SidebarSection title="AGENT" defaultOpen={true}>
-            <SidebarLink icon="🤖" label="Agents (6)" href="/api/agents" />
-            <SidebarLink icon="🔌" label="MCP Servers" href="/settings" />
-            <SidebarLink icon="🛠️" label="Tools (37)" href="/help" />
+            <SidebarNavLink icon={icons.agents} label="Agents" href="/api/agents" />
+            <SidebarNavLink icon={icons.mcp} label="MCP Servers" href="/settings" />
+            <SidebarNavLink icon={icons.tools} label="Tools" href="/help" />
           </SidebarSection>
 
-          {/* ─── SETTINGS Section ─── */}
+          {/* ─── SETTINGS ─── */}
           <SidebarSection title="SETTINGS" defaultOpen={false}>
-            <SidebarLink icon="⚙️" label="Settings" href="/settings" />
-            <SidebarLink icon="❓" label="Help & Docs" href="/help" />
-            <SidebarItem icon="📥" label="Export Chat" onClick={() => {
+            <SidebarNavLink icon={icons.settings} label="Config" href="/settings" />
+            <SidebarNavLink icon={icons.automation} label="Automation" href="/api/events" />
+            <SidebarNavLink icon={icons.debug} label="Debug" href="/api/events?limit=100" />
+            <SidebarNavLink icon={icons.logs} label="Logs" href="/api/sessions" />
+            <SidebarNavLink icon={icons.help} label="Docs" href="/help" />
+            <SidebarNavItem icon={icons.export} label="Export Chat" onClick={() => {
               const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}]\n${m.content}`).join("\n\n---\n\n");
               const blob = new Blob([text], { type: "text/plain" });
               const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `karya-chat-${new Date().toISOString().slice(0,10)}.txt`; a.click();
