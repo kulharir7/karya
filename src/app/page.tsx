@@ -502,30 +502,33 @@ export default function Home() {
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            {/* Clear current chat */}
+            {/* Clear current chat messages */}
             <button
               onClick={async () => {
-                if (!confirm("Clear all messages in this chat?")) return;
-                await fetch("/api/sessions", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ action: "clear", id: activeId }),
-                });
-                setMessages([]);
+                try {
+                  await fetch("/api/sessions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "clear", id: activeId }),
+                  });
+                  setMessages([]);
+                } catch {}
               }}
-              className="px-2 py-1 rounded-lg text-[10px] text-[var(--text-muted)] hover:text-red-400 hover:bg-red-50 transition-colors"
-              title="Clear chat"
-            >🗑️</button>
-            {/* Delete current chat */}
-            <button
-              onClick={async () => {
-                if (activeId === "default") return alert("Cannot delete default session");
-                if (!confirm("Delete this chat permanently?")) return;
-                await delSession(activeId);
-              }}
-              className="px-2 py-1 rounded-lg text-[10px] text-[var(--text-muted)] hover:text-red-400 hover:bg-red-50 transition-colors"
-              title="Delete chat"
-            >✕</button>
+              className="px-2 py-1 rounded-lg text-[10px] text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--bg-hover)] transition-colors"
+              title="Clear messages"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            </button>
+            {/* Delete current chat session */}
+            {activeId !== "default" && (
+              <button
+                onClick={() => delSession(activeId)}
+                className="px-2 py-1 rounded-lg text-[10px] text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--bg-hover)] transition-colors"
+                title="Delete chat"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            )}
             <button
               onClick={newSession}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors shadow-sm"
