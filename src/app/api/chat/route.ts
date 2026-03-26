@@ -34,6 +34,13 @@ const TOOL_NAME_MAP: Record<string, string> = {
   processListTool: "system-processes",
   openAppTool: "system-open-app",
   killProcessTool: "system-kill-process",
+  codeWriteTool: "code-write",
+  codeExecuteTool: "code-execute",
+  codeAnalyzeTool: "code-analyze",
+  apiCallTool: "api-call",
+  csvParseTool: "data-csv-parse",
+  jsonQueryTool: "data-json-query",
+  dataTransformTool: "data-transform",
 };
 
 function resolveToolName(raw: string): string {

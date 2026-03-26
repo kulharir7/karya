@@ -36,6 +36,13 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   "clipboard-read": { icon: "📋", label: "Read Clipboard", runText: "Reading clipboard..." },
   "clipboard-write": { icon: "📝", label: "Write Clipboard", runText: "Writing to clipboard..." },
   "system-notify": { icon: "🔔", label: "Notification", runText: "Sending notification..." },
+  "code-write": { icon: "📝", label: "Write Code", runText: "Writing code..." },
+  "code-execute": { icon: "▶️", label: "Execute Code", runText: "Running code..." },
+  "code-analyze": { icon: "🔬", label: "Analyze Code", runText: "Analyzing code..." },
+  "api-call": { icon: "🌐", label: "API Call", runText: "Calling API..." },
+  "data-csv-parse": { icon: "📊", label: "Parse CSV", runText: "Parsing CSV..." },
+  "data-json-query": { icon: "🔎", label: "Query JSON", runText: "Querying JSON..." },
+  "data-transform": { icon: "🔄", label: "Transform Data", runText: "Transforming data..." },
 };
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };
