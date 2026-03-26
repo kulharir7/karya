@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { saveHistory, loadHistory, clearHistory } from "@/lib/storage";
 
 interface Message {
@@ -219,6 +220,13 @@ export default function Home() {
                 AI Computer Agent • {taskCount} tasks
               </p>
             </div>
+            <Link
+              href="/settings"
+              className="p-2 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-white transition-colors"
+              title="Settings"
+            >
+              ⚙️
+            </Link>
             <button
               onClick={handleClear}
               className="p-2 rounded-lg hover:bg-white/10 text-[var(--text-secondary)] hover:text-white transition-colors"
