@@ -217,6 +217,9 @@ export default function Home() {
           <Link href="/settings" className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
             ⚙️ Settings
           </Link>
+          <Link href="/help" className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+            ❓ Help & Docs
+          </Link>
         </div>
 
         <div className="px-4 py-3 border-t border-gray-100 space-y-2">

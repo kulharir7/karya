@@ -1,0 +1,12 @@
+{
+  "name": "Karya — AI Computer Agent",
+  "short_name": "Karya",
+  "description": "AI that actually DOES things on your computer",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#7c3aed",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
