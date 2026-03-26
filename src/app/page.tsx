@@ -301,13 +301,16 @@ export default function Home() {
 
           {/* Control */}
           <div className="px-3 mt-4 mb-1">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Control</span>
+            <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Control</span>
           </div>
-          <button onClick={() => setCmdOpen(true)} className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+          <Link href="/dashboard" className="flex items-center gap-2.5 px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
+            📊 Dashboard
+          </Link>
+          <button onClick={() => setCmdOpen(true)} className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
             🔍 <span className="flex-1 text-left">Command</span>
-            <kbd className="text-[9px] text-gray-400 bg-gray-100 px-1 py-0.5 rounded">⌘K</kbd>
+            <kbd className="text-[9px] text-[var(--text-muted)] bg-[var(--bg-hover)] px-1 py-0.5 rounded">⌘K</kbd>
           </button>
-          <Link href="/settings" className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+          <Link href="/settings" className="flex items-center gap-2.5 px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors">
             ⚙️ Settings
           </Link>
           <Link href="/help" className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
