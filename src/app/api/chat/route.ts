@@ -8,7 +8,7 @@ async function getAgent() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, history = [], threadId = "default" } = await req.json();
+    const { message, history = [] } = await req.json();
 
     if (!message) {
       return new Response(JSON.stringify({ error: "Message is required" }), {
@@ -22,67 +22,73 @@ export async function POST(req: NextRequest) {
 
     const readable = new ReadableStream({
       async start(controller) {
-        try {
-          // Try streaming
-          let fullText = "";
-          const toolCalls: any[] = [];
+        const send = (data: any) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        };
 
+        try {
+          // Try streaming first
           try {
             const result = await agent.stream(message);
 
+            // Stream text
             for await (const chunk of result.textStream) {
               if (chunk) {
-                fullText += chunk;
-                const data = JSON.stringify({ type: "text", content: chunk });
-                controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+                send({ type: "text", content: chunk });
               }
             }
+
+            // After text stream, get tool results from full result
+            const fullResult = await result;
+            const toolResults = (fullResult as any)?.toolResults || [];
+            for (const t of toolResults) {
+              send({
+                type: "tool-call",
+                toolName: t.toolName || "unknown",
+                args: t.args || {},
+              });
+              send({
+                type: "tool-result",
+                toolName: t.toolName || "unknown",
+                result: t.result || null,
+              });
+            }
           } catch (streamErr: any) {
-            // Fallback to generate
             console.log("Stream fallback:", streamErr.message);
 
+            // Fallback to generate
             const messages = [
               ...history.slice(-10),
               { role: "user" as const, content: message },
             ];
-
             const result = await agent.generate(messages);
-            fullText = result.text || "";
 
-            if (fullText) {
-              const data = JSON.stringify({ type: "text", content: fullText });
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-            }
-
+            // Send tool results
             const trs = (result as any)?.toolResults || [];
             for (const t of trs) {
-              toolCalls.push({
-                name: t.toolName || "unknown",
-                input: t.args || {},
-                output: t.result || null,
+              send({
+                type: "tool-call",
+                toolName: t.toolName || "unknown",
+                args: t.args || {},
               });
+              send({
+                type: "tool-result",
+                toolName: t.toolName || "unknown",
+                result: t.result || null,
+              });
+            }
+
+            // Send text
+            if (result.text) {
+              send({ type: "text", content: result.text });
             }
           }
 
-          // Send tool calls if any
-          if (toolCalls.length > 0) {
-            const toolData = JSON.stringify({ type: "tools", toolCalls });
-            controller.enqueue(encoder.encode(`data: ${toolData}\n\n`));
-          }
-
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
-          );
+          send({ type: "done" });
           controller.close();
         } catch (err: any) {
-          const errData = JSON.stringify({
-            type: "error",
-            content: err.message || "Agent error",
-          });
-          controller.enqueue(encoder.encode(`data: ${errData}\n\n`));
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
-          );
+          send({ type: "error", content: err.message || "Agent error" });
+          send({ type: "done" });
           controller.close();
         }
       },
