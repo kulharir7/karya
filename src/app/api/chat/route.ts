@@ -1,9 +1,29 @@
 import { NextRequest } from "next/server";
 import "dotenv/config";
+import { getMCPToolsets } from "@/mastra/mcp/client";
+
+// Cache MCP tools for 60 seconds to avoid re-fetching on every message
+let mcpToolsCache: { tools: Record<string, any>; timestamp: number } = { tools: {}, timestamp: 0 };
+const MCP_CACHE_TTL = 60_000;
 
 async function getAgent() {
   const { mastra } = await import("@/mastra");
-  return mastra.getAgent("karya");
+  const agent = mastra.getAgent("karya");
+  return agent;
+}
+
+async function getCachedMCPToolsets(): Promise<Record<string, any>> {
+  const now = Date.now();
+  if (now - mcpToolsCache.timestamp < MCP_CACHE_TTL && Object.keys(mcpToolsCache.tools).length > 0) {
+    return mcpToolsCache.tools;
+  }
+  try {
+    const toolsets = await getMCPToolsets();
+    mcpToolsCache = { tools: toolsets, timestamp: now };
+    return toolsets;
+  } catch {
+    return mcpToolsCache.tools; // Return stale cache on error
+  }
 }
 
 // Map Mastra variable names → tool IDs
@@ -43,6 +63,11 @@ const TOOL_NAME_MAP: Record<string, string> = {
   dataTransformTool: "data-transform",
 };
 
+// Reverse map for MCP: tool ID → variable name
+const TOOL_ID_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(TOOL_NAME_MAP).map(([k, v]) => [v, k])
+);
+
 function resolveToolName(raw: string): string {
   return TOOL_NAME_MAP[raw] || raw;
 }
@@ -68,41 +93,43 @@ export async function POST(req: NextRequest) {
         };
 
         try {
-          // Use generate (more reliable for tool calls) and send result as stream
+          // Fetch MCP toolsets and merge with agent's built-in tools
+          const mcpTools = await getCachedMCPToolsets();
+          const mcpToolCount = Object.keys(mcpTools).length;
+          if (mcpToolCount > 0) {
+            console.log(`[Chat] Injecting ${mcpToolCount} MCP tools`);
+          }
+
           const messages = [
             ...history.slice(-10),
             { role: "user" as const, content: message },
           ];
 
-          const result = await agent.generate(messages);
-
-          const resultObj = result as any;
-          console.log("Result keys:", Object.keys(resultObj));
-          if (resultObj.steps?.length > 0) {
-            console.log("Step keys:", Object.keys(resultObj.steps[0]));
-            const s = resultObj.steps[0];
-            if (s.toolCalls?.length > 0) console.log("ToolCall sample:", JSON.stringify(s.toolCalls[0]).slice(0, 200));
-            if (s.toolResults?.length > 0) console.log("ToolResult sample:", JSON.stringify(s.toolResults[0]).slice(0, 200));
+          // Generate with merged tools (built-in + MCP)
+          const generateOptions: any = {};
+          if (mcpToolCount > 0) {
+            generateOptions.toolsets = mcpTools;
           }
-          
-          // Try multiple paths to find tool calls
-          // Path 1: result.steps[].toolCalls / toolResults
+
+          const result = await agent.generate(messages, generateOptions);
+          const resultObj = result as any;
+
+          // Extract and emit tool calls from steps
           const steps = resultObj?.steps || [];
           for (const step of steps) {
             const toolCalls = step?.toolCalls || [];
             const toolResults = step?.toolResults || [];
-            
+
             for (let i = 0; i < toolCalls.length; i++) {
               const tc = toolCalls[i];
               const tr = toolResults[i];
-              
-              // Mastra wraps in .payload
+
               const tcPayload = tc?.payload || tc;
               const trPayload = tr?.payload || tr;
-              
+
               const rawName = tcPayload?.toolName || tcPayload?.name || tc?.toolName || "unknown";
               const toolName = resolveToolName(rawName);
-              
+
               send({
                 type: "tool-call",
                 toolName,
@@ -118,24 +145,21 @@ export async function POST(req: NextRequest) {
               }
             }
           }
-          
-          // Path 2: result.toolResults directly
+
+          // Fallback: direct toolResults
           const directToolResults = resultObj?.toolResults || [];
-          if (Array.isArray(directToolResults)) {
+          if (Array.isArray(directToolResults) && steps.length === 0) {
             for (const tr of directToolResults) {
-              // Only send if not already sent via steps
-              if (steps.length === 0) {
-                send({
-                  type: "tool-call",
-                  toolName: tr?.toolName || "unknown",
-                  args: tr?.args || {},
-                });
-                send({
-                  type: "tool-result",
-                  toolName: tr?.toolName || "unknown",
-                  result: tr?.result || null,
-                });
-              }
+              send({
+                type: "tool-call",
+                toolName: tr?.toolName || "unknown",
+                args: tr?.args || {},
+              });
+              send({
+                type: "tool-result",
+                toolName: tr?.toolName || "unknown",
+                result: tr?.result || null,
+              });
             }
           }
 

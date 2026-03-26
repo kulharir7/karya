@@ -13,8 +13,8 @@ import {
   systemInfoTool, clipboardReadTool, clipboardWriteTool, notifyTool,
   dateTimeTool, processListTool, openAppTool, killProcessTool,
 } from "../tools/system";
-import { codeWriteTool, codeExecuteTool } from "../tools/code";
-import { apiCallTool } from "../tools/data";
+import { codeWriteTool, codeExecuteTool, codeAnalyzeTool } from "../tools/code";
+import { apiCallTool, csvParseTool, jsonQueryTool, dataTransformTool } from "../tools/data";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -121,9 +121,9 @@ Example: "Download all images from this website and resize them"
     readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool,
     readPdfTool, resizeImageTool, zipFilesTool, unzipFilesTool, batchRenameTool, fileSizeTool,
     // Code
-    codeWriteTool, codeExecuteTool,
+    codeWriteTool, codeExecuteTool, codeAnalyzeTool,
     // Data
-    apiCallTool,
+    apiCallTool, csvParseTool, jsonQueryTool, dataTransformTool,
     // Shell
     executeCommandTool,
     // System
