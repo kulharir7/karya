@@ -156,6 +156,53 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } };
 
+  // Quick submit — for example buttons
+  const quickSend = useCallback((text: string) => {
+    if (isLoading) return;
+    setInput(text);
+    // Need to submit after state update
+    setTimeout(() => {
+      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+      // Direct submit
+      const userMsg: Message = { id: Date.now().toString(), role: "user", content: text, timestamp: Date.now() };
+      setMessages((prev) => [...prev, userMsg]);
+      setIsLoading(true); setStreamingText(""); setStreamingTools([]); setTaskCount((c) => c + 1);
+      setInput("");
+
+      fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, history: messages.map((m) => ({ role: m.role, content: m.content })) }),
+      }).then(async (res) => {
+        if (!res.ok) throw new Error("Server error");
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let fullText = "", buffer = "";
+        const tools: { toolName: string; args?: any; result?: any; status: "running" | "done" }[] = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n"); buffer = lines.pop() || "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const d = JSON.parse(line.slice(6).trim());
+              if (d.type === "text") { fullText += d.content; setStreamingText(fullText); }
+              else if (d.type === "tool-call") { tools.push({ toolName: d.toolName, args: d.args, status: "running" }); setStreamingTools([...tools]); }
+              else if (d.type === "tool-result") { const i = tools.findIndex((t) => t.toolName === d.toolName && t.status === "running"); if (i !== -1) { tools[i].result = d.result; tools[i].status = "done"; } setStreamingTools([...tools]); }
+              else if (d.type === "error") { fullText += `\n❌ ${d.content}`; setStreamingText(fullText); }
+            } catch {}
+          }
+        }
+        setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: fullText || "✅ Done.", timestamp: Date.now(), toolCalls: tools.map((t) => ({ ...t })) }]);
+        setStreamingText(""); setStreamingTools([]);
+      }).catch((err) => {
+        setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: `❌ ${err.message}`, timestamp: Date.now() }]);
+        setStreamingText(""); setStreamingTools([]);
+      }).finally(() => { setIsLoading(false); });
+    }, 0);
+  }, [isLoading, messages]);
+
   const currentSession = sessions.find((s) => s.id === activeId);
 
   return (
@@ -271,14 +318,14 @@ export default function Home() {
               <p className="text-sm text-gray-400 mb-6">Execute tasks • Browse web • Manage files • Run commands</p>
               <div className="grid grid-cols-3 gap-2.5 max-w-xl w-full">
                 {[
-                  { icon: "💻", text: "System info" },
-                  { icon: "📁", text: "List Desktop files" },
+                  { icon: "💻", text: "System info batao" },
+                  { icon: "📁", text: "Desktop pe kya files hain?" },
                   { icon: "🔍", text: "Search 'Mastra AI'" },
-                  { icon: "🕐", text: "What time is it?" },
-                  { icon: "📊", text: "Running processes" },
-                  { icon: "📋", text: "Clipboard contents" },
+                  { icon: "🕐", text: "Aaj kya date aur time hai?" },
+                  { icon: "📊", text: "Top 10 running processes dikhao" },
+                  { icon: "📋", text: "Clipboard mein kya hai?" },
                 ].map((ex, i) => (
-                  <button key={i} onClick={() => setInput(ex.text)} className="text-left p-3 rounded-lg border border-gray-200 bg-white hover:border-purple-300 hover:shadow-sm transition-all">
+                  <button key={i} onClick={() => quickSend(ex.text)} className="text-left p-3 rounded-lg border border-gray-200 bg-white hover:border-purple-300 hover:shadow-sm transition-all">
                     <span className="text-base">{ex.icon}</span>
                     <p className="text-xs text-gray-500 mt-1">{ex.text}</p>
                   </button>
@@ -302,7 +349,16 @@ export default function Home() {
                       <div className="flex-1 min-w-0">
                         <div className="text-[10px] text-gray-400 mb-1">Karya · {new Date(msg.timestamp).toLocaleTimeString()}</div>
                         {msg.toolCalls?.map((t, i) => <ToolCard key={i} toolName={t.toolName} status={t.status === "done" ? "done" : "error"} args={t.args} result={t.result} />)}
-                        {msg.content && <div className="mt-1"><MessageContent content={msg.content} /></div>}
+                        {msg.content && (
+                          <div className="mt-1 group/msg relative">
+                            <MessageContent content={msg.content} />
+                            {/* Message actions */}
+                            <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity flex items-center gap-1 mt-1.5">
+                              <button onClick={() => navigator.clipboard.writeText(msg.content)} className="text-[10px] text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-all" title="Copy">📋 Copy</button>
+                              <button onClick={() => quickSend(messages[messages.indexOf(msg) - 1]?.content || "")} className="text-[10px] text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-all" title="Retry">🔄 Retry</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
