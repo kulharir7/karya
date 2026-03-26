@@ -10,138 +10,64 @@ interface ToolCardProps {
 }
 
 const TOOL_ICONS: Record<string, string> = {
-  "browser-navigate": "🌐",
-  "browser-act": "👆",
-  "browser-extract": "📊",
-  "browser-screenshot": "📸",
-  "web-search": "🔍",
-  "file-read": "📖",
-  "file-write": "✏️",
-  "file-list": "📁",
-  "file-move": "📦",
-  "file-search": "🔎",
-  "file-read-pdf": "📄",
-  "file-resize-image": "🖼️",
-  "file-zip": "🗜️",
-  "file-unzip": "📂",
-  "shell-execute": "💻",
-  "system-info": "🖥️",
-  "clipboard-read": "📋",
-  "clipboard-write": "📝",
-  "system-notify": "🔔",
-  "browser-agent": "🤖",
-  "file-batch-rename": "✏️",
-  "file-size-info": "📏",
+  "browser-navigate": "🌐", "browser-act": "👆", "browser-extract": "📊",
+  "browser-screenshot": "📸", "web-search": "🔍", "browser-agent": "🤖",
+  "file-read": "📖", "file-write": "✏️", "file-list": "📁",
+  "file-move": "📦", "file-search": "🔎", "file-read-pdf": "📄",
+  "file-resize-image": "🖼️", "file-zip": "🗜️", "file-unzip": "📂",
+  "file-batch-rename": "✏️", "file-size-info": "📏",
+  "shell-execute": "💻", "system-info": "🖥️",
+  "clipboard-read": "📋", "clipboard-write": "📝", "system-notify": "🔔",
 };
 
 function formatToolName(name: string): string {
-  return name
-    .replace(/^(browser|file|shell|system)-/, "")
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function truncate(str: string, len: number): string {
-  if (str.length <= len) return str;
-  return str.slice(0, len) + "...";
+  return name.replace(/^(browser|file|shell|system)-/, "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export default function ToolCard({ toolName, status, args, result }: ToolCardProps) {
   const [open, setOpen] = useState(false);
   const icon = TOOL_ICONS[toolName] || "🔧";
-  const displayName = formatToolName(toolName);
 
   return (
-    <div
-      className={`rounded-xl border overflow-hidden my-2 transition-all ${
-        status === "running"
-          ? "border-orange-500/40 bg-orange-500/5"
-          : status === "error"
-          ? "border-red-500/40 bg-red-500/5"
-          : "border-[var(--border)] bg-[var(--bg-secondary)]"
-      }`}
-    >
-      {/* Header — always visible */}
+    <div className={`rounded-lg border overflow-hidden my-1.5 ${
+      status === "running" ? "border-amber-300 bg-amber-50" : "border-amber-200 bg-amber-50/60"
+    }`}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left"
+        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-amber-100/50 transition-colors text-left"
       >
-        {/* Status indicator */}
         {status === "running" ? (
-          <div className="w-5 h-5 rounded-full border-2 border-orange-400 border-t-transparent animate-spin shrink-0" />
-        ) : status === "done" ? (
-          <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
-            <span className="text-green-400 text-xs">✓</span>
-          </div>
+          <div className="w-4 h-4 rounded-full border-2 border-amber-500 border-t-transparent animate-spin shrink-0" />
         ) : (
-          <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
-            <span className="text-red-400 text-xs">✗</span>
-          </div>
+          <span className="text-amber-600 text-xs shrink-0">✦</span>
         )}
 
-        {/* Tool info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm">{icon}</span>
-            <span className="text-sm font-medium text-[var(--text-primary)]">
-              {status === "running" ? `Using ${displayName}...` : `Used ${displayName}`}
-            </span>
-          </div>
-          {/* Quick preview of args */}
-          {args && !open && (
-            <p className="text-xs text-[var(--text-secondary)] mt-0.5 truncate">
-              {truncate(
-                typeof args === "string" ? args : JSON.stringify(args),
-                80
-              )}
-            </p>
-          )}
-        </div>
-
-        {/* Expand arrow */}
-        <span
-          className={`text-[var(--text-secondary)] transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        >
-          ▾
+        <span className="text-xs text-gray-600 flex-1">
+          <span className="font-medium text-gray-800">
+            {status === "running" ? "Running" : "Tool output"}
+          </span>
+          {" "}
+          <span className="text-gray-500">{toolName}</span>
         </span>
+
+        <span className={`text-gray-400 text-[10px] transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
       </button>
 
-      {/* Expanded content */}
       {open && (
-        <div className="px-4 pb-3 space-y-2 border-t border-[var(--border)]">
-          {/* Input */}
-          {args && (
+        <div className="px-3.5 pb-3 space-y-2 border-t border-amber-200/60">
+          {args && Object.keys(args).length > 0 && (
             <div className="mt-2">
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-[10px] font-semibold text-blue-400 uppercase">
-                  📥 Input
-                </span>
-              </div>
-              <pre className="text-xs text-[var(--text-secondary)] bg-black/20 rounded-lg p-3 overflow-x-auto max-h-40 font-mono">
-                {typeof args === "string"
-                  ? args
-                  : JSON.stringify(args, null, 2)}
+              <span className="text-[10px] font-medium text-blue-600 uppercase">Input</span>
+              <pre className="text-[11px] text-gray-600 bg-white/80 rounded-md p-2.5 overflow-x-auto max-h-28 mt-1 font-mono border border-gray-100">
+                {typeof args === "string" ? args : JSON.stringify(args, null, 2)}
               </pre>
             </div>
           )}
-
-          {/* Output */}
           {result && (
             <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-[10px] font-semibold text-green-400 uppercase">
-                  📤 Output
-                </span>
-              </div>
-              <pre className="text-xs text-green-400/80 bg-black/20 rounded-lg p-3 overflow-x-auto max-h-48 font-mono">
-                {truncate(
-                  typeof result === "string"
-                    ? result
-                    : JSON.stringify(result, null, 2),
-                  2000
-                )}
+              <span className="text-[10px] font-medium text-green-600 uppercase">Output</span>
+              <pre className="text-[11px] text-gray-600 bg-white/80 rounded-md p-2.5 overflow-x-auto max-h-40 mt-1 font-mono border border-gray-100">
+                {typeof result === "string" ? result.slice(0, 2000) : JSON.stringify(result, null, 2).slice(0, 2000)}
               </pre>
             </div>
           )}
