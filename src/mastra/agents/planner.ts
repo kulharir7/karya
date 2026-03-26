@@ -1,7 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import { getModel } from "@/lib/llm";
 import { memory } from "@/lib/memory";
-import { navigateTool, actTool, extractTool, screenshotTool } from "../tools/browser";
+import { navigateTool, actTool, extractTool, screenshotTool, browserAgentTool } from "../tools/browser";
 import {
   readFileTool,
   writeFileTool,
@@ -12,6 +12,8 @@ import {
   resizeImageTool,
   zipFilesTool,
   unzipFilesTool,
+  batchRenameTool,
+  fileSizeTool,
 } from "../tools/file";
 import { executeCommandTool } from "../tools/shell";
 import {
@@ -104,6 +106,9 @@ User: "MakeMyTrip pe Delhi to Mumbai flight check karo"
     resizeImageTool,
     zipFilesTool,
     unzipFilesTool,
+    batchRenameTool,
+    fileSizeTool,
+    browserAgentTool,
     executeCommandTool,
     systemInfoTool,
     clipboardReadTool,

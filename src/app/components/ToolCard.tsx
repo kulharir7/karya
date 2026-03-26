@@ -29,6 +29,9 @@ const TOOL_ICONS: Record<string, string> = {
   "clipboard-read": "📋",
   "clipboard-write": "📝",
   "system-notify": "🔔",
+  "browser-agent": "🤖",
+  "file-batch-rename": "✏️",
+  "file-size-info": "📏",
 };
 
 function formatToolName(name: string): string {

@@ -1,6 +1,7 @@
 export { readPdfTool } from "./pdf";
 export { resizeImageTool } from "./image";
 export { zipFilesTool, unzipFilesTool } from "./archive";
+export { batchRenameTool, fileSizeTool } from "./batch";
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";

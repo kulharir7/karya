@@ -27,6 +27,9 @@ const TOOL_NAME_MAP: Record<string, string> = {
   clipboardReadTool: "clipboard-read",
   clipboardWriteTool: "clipboard-write",
   notifyTool: "system-notify",
+  browserAgentTool: "browser-agent",
+  batchRenameTool: "file-batch-rename",
+  fileSizeTool: "file-size-info",
 };
 
 function resolveToolName(raw: string): string {
