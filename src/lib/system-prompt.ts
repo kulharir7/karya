@@ -23,6 +23,7 @@ const BOOTSTRAP_FILES = [
   "AGENTS.md",
   "SOUL.md", 
   "USER.md",
+  "MEMORY.md",  // Long-term memory
   "TOOLS.md",
   "IDENTITY.md",
   "HEARTBEAT.md",
@@ -91,6 +92,17 @@ function getRuntimeInfo(): string {
 }
 
 /**
+ * Get today's daily log filename
+ */
+function getTodayLogFilename(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `memory/${year}-${month}-${day}.md`;
+}
+
+/**
  * Build the Project Context section with bootstrap files
  */
 function buildProjectContext(): string {
@@ -99,6 +111,7 @@ function buildProjectContext(): string {
   sections.push("## Project Context");
   sections.push("The following workspace files are loaded for context:\n");
   
+  // Load bootstrap files
   for (const filename of BOOTSTRAP_FILES) {
     const { content, exists, truncated } = loadWorkspaceFile(filename);
     
@@ -117,6 +130,19 @@ function buildProjectContext(): string {
     }
     sections.push(content);
     sections.push(""); // Empty line between files
+  }
+  
+  // Also load today's daily log (recent context)
+  const todayLog = getTodayLogFilename();
+  const { content: todayContent, exists: todayExists } = loadWorkspaceFile(todayLog);
+  if (todayExists && todayContent) {
+    sections.push(`### ${WORKSPACE_DIR}/${todayLog} (Today's Log)`);
+    // Only last 5000 chars of today's log to save tokens
+    const truncatedToday = todayContent.length > 5000 
+      ? "...\n" + todayContent.slice(-5000) 
+      : todayContent;
+    sections.push(truncatedToday);
+    sections.push("");
   }
   
   return sections.join("\n");
@@ -237,6 +263,30 @@ You are Karya — a capable, autonomous AI agent.
 
 ## Preferences
 (Learn and add preferences as you interact)
+`, "utf-8");
+  }
+  
+  // Create default MEMORY.md if missing
+  const memoryPath = path.join(WORKSPACE_DIR, "MEMORY.md");
+  if (!fs.existsSync(memoryPath)) {
+    fs.writeFileSync(memoryPath, `# MEMORY.md - Long Term Memory
+
+This file stores important facts, decisions, and learnings that should persist across sessions.
+
+## User Info
+(Add user details as you learn them)
+
+## Projects
+(Track ongoing projects)
+
+## Preferences
+(Remember user preferences)
+
+## Decisions Made
+(Important decisions that affect future interactions)
+
+---
+*Last updated: (auto-update when you learn something new)*
 `, "utf-8");
   }
 }
