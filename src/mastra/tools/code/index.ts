@@ -85,8 +85,8 @@ export const codeExecuteTool = createTool({
         });
         return { success: true, output: output.slice(0, 10000), error: "" };
       } finally {
-        // Cleanup
-        try { fs.unlinkSync(tmpFile); } catch {}
+        // Cleanup temp file (ignore errors)
+        try { fs.unlinkSync(tmpFile); } catch (e) { /* ignore cleanup error */ }
       }
     } catch (err: any) {
       return {

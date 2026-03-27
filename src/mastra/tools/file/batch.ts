@@ -118,7 +118,7 @@ export const fileSizeTool = createTool({
               totalBytes += fs.statSync(full).size;
             }
           }
-        } catch {}
+        } catch (e) { /* ignore inaccessible directories */ }
       }
 
       walk(resolved);

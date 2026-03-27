@@ -189,8 +189,8 @@ Write-Output "$($bounds.Width)x$($bounds.Height)"
         timeout: 15000,
       }).trim();
       
-      // Cleanup script
-      try { fs.unlinkSync(psScriptPath); } catch {}
+      // Cleanup script (ignore errors)
+      try { fs.unlinkSync(psScriptPath); } catch (e) { /* ignore cleanup error */ }
       
       // Parse dimensions
       const [width, height] = result.split("x").map(Number);
