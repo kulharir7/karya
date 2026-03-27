@@ -536,6 +536,8 @@ export default function Home() {
           {/* ─── PAGES ─── */}
           <SidebarSection title="PAGES" defaultOpen={true}>
             <SidebarNavLink icon={icons.automation} label="Workflows" href="/workflows" />
+            <SidebarNavLink icon={icons.sessions} label="Tasks" href="/tasks" />
+            <SidebarNavLink icon={icons.memory} label="Memory" href="/memory" />
             <SidebarNavLink icon={icons.logs} label="Audit Log" href="/audit" />
           </SidebarSection>
 
