@@ -1,6 +1,6 @@
 "use client";
 
-import { getRiskLevel, getRiskDisplay, type RiskLevel } from "@/lib/tool-permissions";
+import { getRiskLevel, getRiskDisplay, requiresConfirmation, type RiskLevel } from "@/lib/tool-permissions";
 
 interface ToolCardProps {
   toolName: string;
@@ -147,14 +147,19 @@ function RiskBadge({ risk }: { risk: RiskLevel }) {
 export default function ToolCard({ toolName, status, args, result, showRisk = true }: ToolCardProps) {
   const meta = TOOL_META[toolName] || DEFAULT_META;
   const riskLevel = getRiskLevel(toolName);
+  const isDangerous = requiresConfirmation(toolName);
   const isRunning = status === "running";
   const hasResult = result !== undefined && result !== null;
   const output = hasResult ? formatOutput(result) : null;
 
   return (
     <div className={`rounded-xl overflow-hidden my-2 border ${
-      isRunning
+      isDangerous && isRunning
+        ? "border-red-300 bg-gradient-to-r from-red-50 to-orange-50"
+        : isRunning
         ? "border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50"
+        : isDangerous
+        ? "border-red-200 bg-white"
         : "border-gray-200 bg-white"
     }`}>
       {/* Header */}
@@ -185,6 +190,34 @@ export default function ToolCard({ toolName, status, args, result, showRisk = tr
         {/* Risk Badge */}
         {showRisk && <RiskBadge risk={riskLevel} />}
       </div>
+
+      {/* Dangerous tool warning banner */}
+      {isDangerous && isRunning && (
+        <div className="px-4 py-2 bg-red-100 border-t border-red-200 flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span className="text-xs font-medium text-red-700">
+            ⚠️ Dangerous operation in progress — this action may modify your system
+          </span>
+        </div>
+      )}
+
+      {/* Dangerous tool executed notice */}
+      {isDangerous && !isRunning && hasResult && (
+        <div className="px-4 py-2 bg-red-50 border-t border-red-100 flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span className="text-xs text-red-600">
+            This was a dangerous operation. Review the output carefully.
+          </span>
+        </div>
+      )}
 
       {/* Output — always visible when done */}
       {hasResult && output && (

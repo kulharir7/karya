@@ -146,6 +146,12 @@ export const TOOL_RISKS: Record<string, ToolRiskInfo> = {
     description: 'Execute shell command',
     requiresConfirmation: true,
   },
+  'shell-execute': {
+    risk: 'dangerous',
+    category: 'shell',
+    description: 'Execute shell command',
+    requiresConfirmation: true,
+  },
 
   // ============================================
   // SYSTEM TOOLS
