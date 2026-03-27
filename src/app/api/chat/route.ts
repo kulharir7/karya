@@ -211,7 +211,12 @@ export async function POST(req: NextRequest) {
         await eventBus.emit("agent:start", { sessionId, message });
 
         try {
-          const streamOptions: any = {};
+          const streamOptions: any = {
+            // AGENTIC LOOP: Allow agent to run multiple tool iterations
+            // This lets agent: tool1 → see result → tool2 → see result → ... → final response
+            // Without this, agent stops after first round of tools
+            maxSteps: 10, // Up to 10 tool iterations per request
+          };
           if (mcpToolCount > 0) {
             streamOptions.toolsets = mcpToolsets;
           }
