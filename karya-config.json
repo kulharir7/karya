@@ -1,6 +1,6 @@
 {
   "provider": "anthropic",
-  "model": "claude-sonnet-4-20250514",
+  "model": "claude-opus-4-20250514",
   "apiKeys": {
     "anthropic": "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",
     "openai": "",

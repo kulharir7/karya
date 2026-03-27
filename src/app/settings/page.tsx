@@ -313,6 +313,18 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* Change API Key Button (for active provider) */}
+          {config?.provider && config.provider !== "custom" && config.provider !== "ollama" && !showKeyInput && (
+            <div className="mb-4">
+              <button
+                onClick={() => setShowKeyInput(config.provider)}
+                className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"
+              >
+                🔑 {hasKeys[config.provider] ? "Change" : "Add"} {PROVIDER_INFO[config.provider]?.name} API Key
+              </button>
+            </div>
+          )}
+
           {/* Model Selection */}
           {config?.provider && config.provider !== "custom" && PROVIDER_INFO[config.provider] && (
             <div>
