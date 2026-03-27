@@ -7,10 +7,19 @@ import { researcherAgent } from "./agents/researcher";
 import { dataAnalystAgent } from "./agents/data-analyst";
 import { createKaryaMCPServer } from "./mcp/server";
 
-// MCP Server — exposes all 37 tools to external clients
+// Import workflows
+import { 
+  webScraperWorkflow,
+  fileOrganizerWorkflow,
+  researchPipelineWorkflow,
+  dataProcessorWorkflow,
+  backupWorkflow,
+} from "./workflows";
+
+// MCP Server — exposes all tools to external clients
 export const karyaMCPServer = createKaryaMCPServer();
 
-// Register ALL agents with Mastra
+// Register ALL agents AND workflows with Mastra
 export const mastra = new Mastra({
   agents: {
     karya: supervisorAgent,          // Main orchestrator (default)
@@ -19,6 +28,13 @@ export const mastra = new Mastra({
     "karya-coder": coderAgent,       // Programming specialist
     "karya-researcher": researcherAgent, // Research specialist
     "karya-data-analyst": dataAnalystAgent, // Data analysis specialist
+  },
+  workflows: {
+    webScraperWorkflow,
+    fileOrganizerWorkflow,
+    researchPipelineWorkflow,
+    dataProcessorWorkflow,
+    backupWorkflow,
   },
   server: {
     port: parseInt(process.env.KARYA_MCP_PORT || "3001"),

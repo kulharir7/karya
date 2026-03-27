@@ -36,6 +36,10 @@ import { suggestRecoveryTool, logRecoveryTool } from "../tools/recovery";
 import { confidenceCheckTool } from "../tools/confidence";
 import { gitStatusTool, gitCommitTool, gitPushTool, gitLogTool, gitDiffTool } from "../tools/git";
 import { skillListTool, skillMatchTool, skillLoadTool, skillCreateTool } from "../tools/skills";
+import {
+  workflowListTool, workflowRunTool, workflowStatusTool,
+  workflowHistoryTool, workflowResumeTool, workflowCancelTool, workflowStatsTool,
+} from "../tools/workflow";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -357,5 +361,8 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
     gitStatusTool, gitCommitTool, gitPushTool, gitLogTool, gitDiffTool,
     // Skills (OpenClaw-style dynamic instructions)
     skillListTool, skillMatchTool, skillLoadTool, skillCreateTool,
+    // Workflows (Automated multi-step pipelines)
+    workflowListTool, workflowRunTool, workflowStatusTool,
+    workflowHistoryTool, workflowResumeTool, workflowCancelTool, workflowStatsTool,
   },
 });

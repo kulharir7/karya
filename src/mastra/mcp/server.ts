@@ -60,6 +60,12 @@ import { confidenceCheckTool } from "../tools/confidence";
 // Git tools (Point 48)
 import { gitStatusTool, gitCommitTool, gitPushTool, gitLogTool, gitDiffTool } from "../tools/git";
 
+// Workflow tools (Point 11-15)
+import {
+  workflowListTool, workflowRunTool, workflowStatusTool,
+  workflowHistoryTool, workflowResumeTool, workflowCancelTool, workflowStatsTool,
+} from "../tools/workflow";
+
 /**
  * Karya MCP Server — exposes ALL 32 tools to external MCP clients.
  * 
@@ -165,6 +171,15 @@ export function createKaryaMCPServer() {
       gitPushTool,
       gitLogTool,
       gitDiffTool,
+
+      // === Workflows (7) ===
+      workflowListTool,
+      workflowRunTool,
+      workflowStatusTool,
+      workflowHistoryTool,
+      workflowResumeTool,
+      workflowCancelTool,
+      workflowStatsTool,
     },
   });
 }

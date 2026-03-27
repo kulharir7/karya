@@ -45,6 +45,10 @@ export type KaryaEvent =
   // Plugin events
   | "plugin:loaded"        // plugin was loaded
   | "plugin:error"         // plugin failed to load
+  // Workflow events
+  | "workflow:created"     // workflow run created
+  | "workflow:updated"     // workflow run status updated
+  | "workflow:deleted"     // workflow run deleted
   // Custom events (for user plugins)
   | `custom:${string}`;
 
