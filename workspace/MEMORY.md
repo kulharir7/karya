@@ -1,12 +1,17 @@
-# MEMORY.md — Karya Long-Term Memory
+# MEMORY.md — Long-Term Memory
 
-_Curated knowledge that persists across sessions._
+## User: Ravi
+- Building Karya AI Computer Agent
+- Location: F:\karya
+- Prefers Hindi/Hinglish communication
 
-## Facts
+## Project: Karya
+- AI Computer Agent with Mastra framework
+- 66+ tools across multiple categories
+- OpenClaw-style architecture
+
+## Key Facts
+_(Add important facts to remember here)_
 
 ## Preferences
-
-## Important Notes
-
----
-_Updated by Karya automatically. Edit freely._
+_(Add user preferences as learned)_

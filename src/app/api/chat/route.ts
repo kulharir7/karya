@@ -148,9 +148,10 @@ export async function POST(req: NextRequest) {
 
     // Inject workspace context as system message (like OpenClaw bootstrap)
     if (workspaceContext) {
+      console.log("[chat] Injecting workspace context:", workspaceContext.slice(0, 500) + "...");
       contextMessages.push({
         role: "system",
-        content: `## Workspace Memory\n${workspaceContext}`,
+        content: workspaceContext,
       });
     }
 

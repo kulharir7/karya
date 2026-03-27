@@ -234,52 +234,76 @@ export function searchMemory(query: string, maxResults: number = 10): {
 
 /**
  * Get workspace context for system prompt injection.
- * Returns key memory files content for the agent to be aware of.
+ * OpenClaw-style: inject bootstrap files under "Project Context"
+ * 
+ * Files injected (order matters):
+ * - AGENTS.md: Operating instructions
+ * - SOUL.md: Persona/personality
+ * - USER.md: User profile
+ * - TOOLS.md: Tool notes
+ * - MEMORY.md: Long-term memory (truncated)
+ * - Today's daily log (recent activity)
  */
 export function getWorkspaceContext(): string {
   initWorkspace();
 
-  const parts: string[] = [];
+  const sections: string[] = [];
+  
+  sections.push("# Project Context");
+  sections.push("The following workspace files provide context for this session:\n");
 
-  // Soul (who the agent is)
-  const soul = readWorkspaceFile("SOUL.md");
-  if (soul.trim()) {
-    parts.push(soul);
+  // Bootstrap files to inject (OpenClaw order)
+  const bootstrapFiles = [
+    { name: "AGENTS.md", maxChars: 8000 },
+    { name: "SOUL.md", maxChars: 3000 },
+    { name: "USER.md", maxChars: 2000 },
+    { name: "TOOLS.md", maxChars: 3000 },
+    { name: "IDENTITY.md", maxChars: 1000 },
+  ];
+
+  for (const { name, maxChars } of bootstrapFiles) {
+    const content = readWorkspaceFile(name);
+    if (content.trim()) {
+      const truncated = content.length > maxChars 
+        ? content.slice(0, maxChars) + "\n\n*[...truncated, use file-read for full content]*"
+        : content;
+      sections.push(`## ${WORKSPACE_DIR}/${name}`);
+      sections.push(truncated);
+      sections.push(""); // Empty line
+    }
   }
 
-  // Agents (workspace instructions)
-  const agents = readWorkspaceFile("AGENTS.md");
-  if (agents.trim()) {
-    parts.push(agents);
-  }
-
-  // Rules
-  const rules = readWorkspaceFile("RULES.md");
-  if (rules.trim()) {
-    parts.push(`## Agent Rules\n${rules}`);
-  }
-
-  // Long-term memory (summarized)
+  // MEMORY.md — long-term memory (more truncation for context efficiency)
   const memory = readLongTermMemory();
   if (memory.trim()) {
-    const truncated = memory.length > 2000 ? memory.slice(0, 2000) + "\n...(truncated)" : memory;
-    parts.push(`## Long-Term Memory\n${truncated}`);
+    const truncated = memory.length > 4000 
+      ? memory.slice(0, 4000) + "\n\n*[...truncated, use memory-read for full content]*"
+      : memory;
+    sections.push(`## ${WORKSPACE_DIR}/MEMORY.md (Long-Term Memory)`);
+    sections.push(truncated);
+    sections.push("");
   }
 
-  // Today's log (recent context)
+  // Today's activity log — most recent context
   const todayLog = readTodayLog();
   if (todayLog.trim()) {
-    const truncated = todayLog.length > 1500 ? todayLog.slice(-1500) + "\n...(showing recent)" : todayLog;
-    parts.push(`## Today's Activity Log\n${truncated}`);
+    const truncated = todayLog.length > 2000 
+      ? "...(recent entries):\n" + todayLog.slice(-2000)
+      : todayLog;
+    sections.push(`## ${WORKSPACE_DIR}/memory/${getTodayDate()}.md (Today's Log)`);
+    sections.push(truncated);
+    sections.push("");
   }
 
-  // User info
-  const user = readWorkspaceFile("USER.md");
-  if (user.trim()) {
-    parts.push(user);
-  }
+  // Runtime info
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const now = new Date();
+  sections.push("## Runtime");
+  sections.push(`- **Workspace**: ${WORKSPACE_DIR}`);
+  sections.push(`- **Date/Time**: ${now.toLocaleString("en-IN", { dateStyle: "full", timeStyle: "short", timeZone: timezone })}`);
+  sections.push(`- **Timezone**: ${timezone}`);
 
-  return parts.join("\n\n---\n\n");
+  return sections.join("\n");
 }
 
 /**

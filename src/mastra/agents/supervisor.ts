@@ -1,6 +1,10 @@
 import { Agent } from "@mastra/core/agent";
 import { getModel } from "@/lib/llm";
 import { memory } from "@/lib/memory";
+import { buildSystemPrompt, ensureWorkspace } from "@/lib/system-prompt";
+
+// Ensure workspace exists with default files on startup
+ensureWorkspace();
 
 // Import ALL tools from all categories
 import { navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool } from "../tools/browser";
