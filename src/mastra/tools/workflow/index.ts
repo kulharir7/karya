@@ -67,9 +67,10 @@ Available workflows:
 - data-processor: Analyze CSV/JSON/TXT files (filePath, outputFormat?)
 - backup: Backup files to archive (sourcePaths[], backupPath)
 - multi-source-research: PARALLEL search across Web + Wikipedia + News (query, maxResultsPerSource?)
-- file-cleanup: HUMAN-APPROVED file deletion — suspends for confirmation (folderPath, criteria?)`,
+- file-cleanup: HUMAN-APPROVED file deletion — suspends for confirmation (folderPath, criteria?)
+- batch-image-processor: FOREACH resize/compress images in folder (folderPath, maxWidth?, quality?, format?)`,
   inputSchema: z.object({
-    workflowId: z.enum(["web-scraper", "file-organizer", "research-pipeline", "data-processor", "backup", "multi-source-research", "file-cleanup"])
+    workflowId: z.enum(["web-scraper", "file-organizer", "research-pipeline", "data-processor", "backup", "multi-source-research", "file-cleanup", "batch-image-processor"])
       .describe("Which workflow to run"),
     input: z.record(z.string(), z.any())
       .describe("Input data for the workflow (varies by workflow type)"),
