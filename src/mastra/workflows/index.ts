@@ -22,6 +22,7 @@ import { fileOrganizerWorkflow } from "./file-organizer";
 import { researchPipelineWorkflow } from "./research-pipeline";
 import { dataProcessorWorkflow } from "./data-processor";
 import { backupWorkflow } from "./backup";
+import { multiSourceResearchWorkflow } from "./multi-source-research";
 
 // Export all workflows
 export {
@@ -30,6 +31,7 @@ export {
   researchPipelineWorkflow,
   dataProcessorWorkflow,
   backupWorkflow,
+  multiSourceResearchWorkflow,
 };
 
 // All workflows registry
@@ -39,6 +41,7 @@ export const workflows = {
   "research-pipeline": researchPipelineWorkflow,
   "data-processor": dataProcessorWorkflow,
   "backup": backupWorkflow,
+  "multi-source-research": multiSourceResearchWorkflow,
 };
 
 export type WorkflowId = keyof typeof workflows;

@@ -65,9 +65,10 @@ Available workflows:
 - file-organizer: Organize files by type (sourcePath, rules?)
 - research-pipeline: Research a topic (query, sources?, depth?)
 - data-processor: Analyze CSV/JSON/TXT files (filePath, outputFormat?)
-- backup: Backup files to archive (sourcePaths[], backupPath)`,
+- backup: Backup files to archive (sourcePaths[], backupPath)
+- multi-source-research: PARALLEL search across Web + Wikipedia + News (query, maxResultsPerSource?)`,
   inputSchema: z.object({
-    workflowId: z.enum(["web-scraper", "file-organizer", "research-pipeline", "data-processor", "backup"])
+    workflowId: z.enum(["web-scraper", "file-organizer", "research-pipeline", "data-processor", "backup", "multi-source-research"])
       .describe("Which workflow to run"),
     input: z.record(z.string(), z.any())
       .describe("Input data for the workflow (varies by workflow type)"),

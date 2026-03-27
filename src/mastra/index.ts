@@ -14,6 +14,7 @@ import {
   researchPipelineWorkflow,
   dataProcessorWorkflow,
   backupWorkflow,
+  multiSourceResearchWorkflow,
 } from "./workflows";
 
 // MCP Server — exposes all tools to external clients
@@ -35,6 +36,7 @@ export const mastra = new Mastra({
     researchPipelineWorkflow,
     dataProcessorWorkflow,
     backupWorkflow,
+    multiSourceResearchWorkflow,
   },
   server: {
     port: parseInt(process.env.KARYA_MCP_PORT || "3001"),
