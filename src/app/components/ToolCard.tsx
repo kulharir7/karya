@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { getRiskLevel, getRiskDisplay, type RiskLevel } from "@/lib/tool-permissions";
 
 interface ToolCardProps {
   toolName: string;
   status: "running" | "done" | "error";
   args?: any;
   result?: any;
+  showRisk?: boolean; // Show risk badge (default: true)
 }
 
 const TOOL_META: Record<string, { icon: string; label: string; runText: string }> = {
@@ -83,9 +85,27 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };
 
-export default function ToolCard({ toolName, status, args, result }: ToolCardProps) {
+// Risk badge component
+function RiskBadge({ risk }: { risk: RiskLevel }) {
+  const display = getRiskDisplay(risk);
+  return (
+    <span
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide shrink-0"
+      style={{
+        backgroundColor: display.bgColor,
+        color: display.color,
+      }}
+      title={display.description}
+    >
+      {display.emoji} {display.label}
+    </span>
+  );
+}
+
+export default function ToolCard({ toolName, status, args, result, showRisk = true }: ToolCardProps) {
   const [open, setOpen] = useState(false);
   const meta = TOOL_META[toolName] || DEFAULT_META;
+  const riskLevel = getRiskLevel(toolName);
 
   const hasContent = (args && Object.keys(args).length > 0) || result;
 
@@ -128,6 +148,11 @@ export default function ToolCard({ toolName, status, args, result }: ToolCardPro
             )}
           </span>
         </div>
+
+        {/* Risk Badge */}
+        {showRisk && (
+          <RiskBadge risk={riskLevel} />
+        )}
 
         {/* Expand */}
         {hasContent && (
