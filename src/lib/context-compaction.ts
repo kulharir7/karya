@@ -1,21 +1,24 @@
 /**
  * Context Compaction — Auto-summarize long conversations
  * 
- * When context gets too long:
- * 1. Keep last N messages intact
- * 2. Summarize older messages into compact form
- * 3. Preserve key facts, decisions, tool results
- * 
- * Like OpenClaw's pre-compaction memory flush.
+ * OpenClaw-style compaction with memory flush:
+ * 1. When approaching limit, trigger memory flush first
+ * 2. Agent writes durable facts to MEMORY.md / daily logs
+ * 3. Then compact (summarize old messages)
+ * 4. Continue with fresh context + memory files loaded
  */
 
 import { generateText } from "ai";
 import { getModel } from "./llm";
+import { getMemoryManager } from "./memory-v2";
+import { logger } from "./logger";
 
 // Config
 const MAX_MESSAGES_BEFORE_COMPACT = 20;
 const KEEP_RECENT_MESSAGES = 6;
 const MAX_CONTEXT_CHARS = 50000;
+const SOFT_THRESHOLD_CHARS = 40000; // Trigger memory flush before hard compact
+const MEMORY_FLUSH_ENABLED = true;
 
 export interface Message {
   role: "user" | "assistant" | "system" | "tool";
@@ -210,6 +213,7 @@ export function getCompactionStats(messages: Message[]): {
   messageCount: number;
   totalChars: number;
   needsCompaction: boolean;
+  needsMemoryFlush: boolean;
   estimatedTokens: number;
 } {
   const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
@@ -218,6 +222,102 @@ export function getCompactionStats(messages: Message[]): {
     messageCount: messages.length,
     totalChars,
     needsCompaction: needsCompaction(messages),
-    estimatedTokens: Math.ceil(totalChars / 4), // Rough estimate
+    needsMemoryFlush: MEMORY_FLUSH_ENABLED && totalChars > SOFT_THRESHOLD_CHARS && totalChars < MAX_CONTEXT_CHARS,
+    estimatedTokens: Math.ceil(totalChars / 4),
   };
+}
+
+/**
+ * Memory Flush — Save durable facts before compaction
+ * 
+ * This is OpenClaw's safety net: before context is compacted,
+ * we trigger the agent to write important info to memory files.
+ */
+export async function memoryFlush(
+  messages: Message[],
+  options: {
+    sessionId?: string;
+    model?: string;
+  } = {}
+): Promise<{ flushed: boolean; facts: string[] }> {
+  if (!MEMORY_FLUSH_ENABLED) {
+    return { flushed: false, facts: [] };
+  }
+
+  const stats = getCompactionStats(messages);
+  
+  // Only flush when approaching threshold
+  if (!stats.needsMemoryFlush) {
+    return { flushed: false, facts: [] };
+  }
+
+  logger.info("compaction", "Memory flush triggered — context approaching limit");
+
+  // Extract facts to save
+  const facts = extractFacts(messages);
+  
+  if (facts.length === 0) {
+    return { flushed: false, facts: [] };
+  }
+
+  try {
+    const memory = getMemoryManager();
+    
+    // Log facts to today's daily log
+    const formattedFacts = facts.map(f => `- ${f}`).join("\n");
+    memory.logToday(`## Auto-saved from session (pre-compaction)\n\n${formattedFacts}`);
+    
+    logger.info("compaction", `Flushed ${facts.length} facts to daily log`);
+    
+    return { flushed: true, facts };
+  } catch (err) {
+    logger.error("compaction", "Memory flush failed", err);
+    return { flushed: false, facts: [] };
+  }
+}
+
+/**
+ * Smart compaction with memory flush
+ * 
+ * Flow:
+ * 1. Check if approaching limit → trigger memory flush
+ * 2. Check if over limit → compact
+ * 3. Return updated messages
+ */
+export async function smartCompactWithFlush(
+  messages: Message[],
+  options?: { keepRecent?: number; model?: string; sessionId?: string }
+): Promise<CompactionResult & { memoryFlushed: boolean }> {
+  // Step 1: Memory flush if approaching threshold
+  const flushResult = await memoryFlush(messages, {
+    sessionId: options?.sessionId,
+    model: options?.model,
+  });
+
+  // Step 2: Compact if needed
+  const compactResult = await smartCompact(messages, options);
+
+  return {
+    ...compactResult,
+    memoryFlushed: flushResult.flushed,
+  };
+}
+
+/**
+ * Generate memory flush prompt for agent
+ * 
+ * Use this to inject a system message that reminds the agent
+ * to save important info before compaction.
+ */
+export function getMemoryFlushPrompt(): string {
+  const date = new Date().toISOString().split("T")[0];
+  
+  return `[SYSTEM: Context approaching compaction threshold]
+
+Before continuing, save any important information that should persist:
+1. Use memory-write to update MEMORY.md with lasting facts
+2. Use memory-log to record today's key events in memory/${date}.md
+3. Note any user preferences, decisions, or project status
+
+If nothing important to save, continue normally.`;
 }
