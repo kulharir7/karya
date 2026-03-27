@@ -53,6 +53,11 @@ export type KaryaEvent =
   | "trigger:fired"        // trigger was fired
   | "trigger:deleted"      // trigger was deleted
   | "workflow:deleted"     // workflow run deleted
+  // Sub-agent events
+  | "subagent:spawned"     // sub-agent spawned
+  | "subagent:completed"   // sub-agent completed
+  | "subagent:failed"      // sub-agent failed
+  | "subagent:killed"      // sub-agent killed
   // Custom events (for user plugins)
   | `custom:${string}`;
 
