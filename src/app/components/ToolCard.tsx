@@ -85,6 +85,76 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };
 
+/**
+ * Format tool output for display
+ * - Parse JSON strings and pretty-print
+ * - Handle objects with key-value display
+ * - Truncate long output
+ */
+function formatOutput(result: any): string {
+  const MAX_LENGTH = 3000;
+  
+  // If it's already a string, try to parse as JSON for pretty printing
+  if (typeof result === "string") {
+    // Try to parse as JSON
+    try {
+      const parsed = JSON.parse(result);
+      return formatObject(parsed, MAX_LENGTH);
+    } catch {
+      // Not JSON, return as-is (truncated)
+      return result.slice(0, MAX_LENGTH);
+    }
+  }
+  
+  // If it's an object, format it nicely
+  if (typeof result === "object" && result !== null) {
+    return formatObject(result, MAX_LENGTH);
+  }
+  
+  // Fallback
+  return String(result).slice(0, MAX_LENGTH);
+}
+
+/**
+ * Format object as readable key-value pairs
+ */
+function formatObject(obj: Record<string, any>, maxLength: number): string {
+  const lines: string[] = [];
+  
+  for (const [key, value] of Object.entries(obj)) {
+    // Convert camelCase to Title Case, but keep acronyms together (GB, CPU, etc.)
+    const displayKey = key
+      .replace(/([a-z])([A-Z])/g, '$1 $2')  // camelCase split
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')  // handle consecutive caps
+      .replace(/^./, s => s.toUpperCase())  // capitalize first letter
+      .trim();
+    let displayValue: string;
+    
+    if (typeof value === "object" && value !== null) {
+      // Nested object - compact JSON
+      displayValue = JSON.stringify(value, null, 2);
+    } else if (typeof value === "number") {
+      // Format numbers nicely
+      if (key.toLowerCase().includes("gb") || key.toLowerCase().includes("memory")) {
+        displayValue = `${value.toFixed(1)} GB`;
+      } else if (key.toLowerCase().includes("percent") || key.toLowerCase().includes("usage")) {
+        displayValue = `${value.toFixed(1)}%`;
+      } else {
+        displayValue = value.toLocaleString();
+      }
+    } else if (typeof value === "boolean") {
+      displayValue = value ? "✓ Yes" : "✗ No";
+    } else {
+      displayValue = String(value);
+    }
+    
+    lines.push(`${displayKey}: ${displayValue}`);
+  }
+  
+  const output = lines.join('\n');
+  return output.slice(0, maxLength);
+}
+
 // Risk badge component
 function RiskBadge({ risk }: { risk: RiskLevel }) {
   const display = getRiskDisplay(risk);
@@ -174,8 +244,8 @@ export default function ToolCard({ toolName, status, args, result, showRisk = tr
           {result && (
             <div>
               <div className="text-[10px] font-semibold text-green-600 uppercase mb-1">Output</div>
-              <pre className="text-[11px] text-gray-600 bg-white rounded-md p-2.5 overflow-x-auto max-h-48 font-mono border border-gray-100 leading-relaxed">
-                {typeof result === "string" ? result.slice(0, 3000) : JSON.stringify(result, null, 2).slice(0, 3000)}
+              <pre className="text-[11px] text-gray-600 bg-white rounded-md p-2.5 overflow-x-auto max-h-48 font-mono border border-gray-100 leading-relaxed whitespace-pre-wrap break-words">
+                {formatOutput(result)}
               </pre>
             </div>
           )}
