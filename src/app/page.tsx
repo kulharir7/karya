@@ -499,26 +499,23 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto sidebar-scroll">
           {/* ─── CONTROL ─── */}
           <SidebarSection title="CONTROL" defaultOpen={true}>
-            <SidebarNavLink icon={icons.dashboard} label="Overview" href="/dashboard" />
+            <SidebarNavLink icon={icons.dashboard} label="Dashboard" href="/dashboard" />
             <SidebarNavItem icon={icons.search} label="Command" onClick={() => setCmdOpen(true)} badge="⌘K" />
-            <SidebarNavLink icon={icons.memory} label="Memory" href="/api/memory?action=list" />
-            <SidebarNavLink icon={icons.events} label="Events" href="/api/events" />
+            <SidebarNavLink icon={icons.tools} label="Tools & Help" href="/help" />
+            <SidebarNavLink icon={icons.settings} label="Settings" href="/settings" />
           </SidebarSection>
 
-          {/* ─── AGENT ─── */}
-          <SidebarSection title="AGENT" defaultOpen={true}>
-            <SidebarNavLink icon={icons.agents} label="Agents" href="/api/agents" />
-            <SidebarNavLink icon={icons.mcp} label="MCP Servers" href="/settings" />
-            <SidebarNavLink icon={icons.tools} label="Tools" href="/help" />
-          </SidebarSection>
-
-          {/* ─── SETTINGS ─── */}
-          <SidebarSection title="SETTINGS" defaultOpen={false}>
-            <SidebarNavLink icon={icons.settings} label="Config" href="/settings" />
-            <SidebarNavLink icon={icons.automation} label="Automation" href="/api/events" />
-            <SidebarNavLink icon={icons.debug} label="Debug" href="/api/events?limit=100" />
-            <SidebarNavLink icon={icons.logs} label="Logs" href="/api/sessions" />
-            <SidebarNavLink icon={icons.help} label="Docs" href="/help" />
+          {/* ─── DEV / DEBUG ─── */}
+          <SidebarSection title="DEBUG" defaultOpen={false}>
+            <SidebarNavLink icon={icons.events} label="Events API" href="/api/events" />
+            <SidebarNavLink icon={icons.memory} label="Memory API" href="/api/memory?action=list" />
+            <SidebarNavLink icon={icons.logs} label="Sessions API" href="/api/sessions" />
+            <SidebarNavLink icon={icons.mcp} label="MCP API" href="/api/mcp?action=list" />
+            <SidebarNavItem icon={icons.export} label="Export Chat" onClick={() => {
+              const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}]\n${m.content}`).join("\n\n---\n\n");
+              const blob = new Blob([text], { type: "text/plain" });
+              const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `karya-chat-${new Date().toISOString().slice(0,10)}.txt`; a.click();
+            }} />
             <SidebarNavItem icon={icons.export} label="Export Chat" onClick={() => {
               const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}]\n${m.content}`).join("\n\n---\n\n");
               const blob = new Blob([text], { type: "text/plain" });
