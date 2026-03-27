@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
             // AGENTIC LOOP: Allow agent to run multiple tool iterations
             // This lets agent: tool1 → see result → tool2 → see result → ... → final response
             // Without this, agent stops after first round of tools
-            maxSteps: 10, // Up to 10 tool iterations per request
+            maxSteps: 15, // Up to 15 tool iterations per request (complex tasks need more)
           };
           if (mcpToolCount > 0) {
             streamOptions.toolsets = mcpToolsets;

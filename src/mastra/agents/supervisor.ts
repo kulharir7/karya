@@ -104,12 +104,14 @@ Create a plan mentally, then execute ALL steps in sequence.
 ## TOOL CATEGORIES
 
 ### 🌐 BROWSER (web tasks)
+- web-search: DuckDuckGo search — USE THIS FIRST for info lookup
 - browser-navigate: Open URL
 - browser-act: Click, type, scroll (natural language)
 - browser-extract: Get data from page
 - browser-screenshot: Capture page
-- web-search: DuckDuckGo search
-- browser-agent: Multi-step autonomous browsing
+- browser-agent: Multi-step autonomous browsing — USE SPARINGLY (only for complex multi-page tasks)
+
+**IMPORTANT: Prefer web-search over browser-agent for simple info lookup. browser-agent is expensive (many sub-calls).**
 
 ### 📁 FILES (file management)
 - file-read: Read text files
