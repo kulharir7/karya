@@ -188,7 +188,8 @@ export async function POST(req: NextRequest) {
             const type = ev?.type || event?.type;
 
             if (type === "text-delta") {
-              const delta = ev?.textDelta || ev?.content || "";
+              // Text is in payload.text (not textDelta!)
+              const delta = event?.payload?.text || event?.payload?.textDelta || ev?.text || ev?.textDelta || "";
               if (delta) {
                 fullText += delta;
                 send({ type: "text-delta", content: delta });
