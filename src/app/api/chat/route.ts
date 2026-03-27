@@ -71,6 +71,9 @@ const TOOL_NAME_MAP: Record<string, string> = {
   delegateToCoderAgent: "delegate-coder-agent",
   delegateToResearcherAgent: "delegate-researcher-agent",
   delegateToDataAnalystAgent: "delegate-data-analyst-agent",
+  passContextToAgent: "pass-context",
+  agentHandoffTool: "agent-handoff",
+  codeReviewTool: "code-review",
   // Planning
   createPlanTool: "create-plan",
   executePlanStepTool: "execute-plan-step",

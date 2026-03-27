@@ -22,6 +22,7 @@ import { scheduleTaskTool, listTasksTool, cancelTaskTool } from "../tools/schedu
 import {
   delegateToBrowserAgent, delegateToFileAgent, delegateToCoderAgent,
   delegateToResearcherAgent, delegateToDataAnalystAgent,
+  passContextToAgent, agentHandoffTool, codeReviewTool,
 } from "../tools/agents";
 import { createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusTool } from "../tools/planning";
 import { suggestRecoveryTool, logRecoveryTool } from "../tools/recovery";
@@ -113,6 +114,11 @@ For every task:
 - For data analysis (CSV, JSON, statistics), USE delegate-data-analyst-agent
 - For simple tasks (system info, clipboard, time), handle DIRECTLY with your own tools
 
+**AGENT CHAINING (Points 23-25):**
+- pass-context: Send data from one agent to another for the next call
+- agent-handoff: Chain two agents: first runs → output passed to second automatically
+- code-review: After writing code, submit it for review by a reviewer agent
+
 ### 📋 PLANNING (complex task management)
 - create-plan: Break complex tasks into numbered steps with tools. ALWAYS use for 3+ step tasks.
 - execute-plan-step: Track progress — mark steps as running/done/failed during execution.
@@ -203,6 +209,7 @@ Example: "Download all images from this website and resize them"
     // Agent Delegation (Supervisor Pattern)
     delegateToBrowserAgent, delegateToFileAgent, delegateToCoderAgent,
     delegateToResearcherAgent, delegateToDataAnalystAgent,
+    passContextToAgent, agentHandoffTool, codeReviewTool,
     // Planning (Point 5)
     createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusTool,
     // Error Recovery (Point 7)

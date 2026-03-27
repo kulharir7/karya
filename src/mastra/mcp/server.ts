@@ -45,6 +45,7 @@ import { scheduleTaskTool, listTasksTool, cancelTaskTool } from "../tools/schedu
 import {
   delegateToBrowserAgent, delegateToFileAgent, delegateToCoderAgent,
   delegateToResearcherAgent, delegateToDataAnalystAgent,
+  passContextToAgent, agentHandoffTool, codeReviewTool,
 } from "../tools/agents";
 
 // Planning tools (Point 5)
@@ -138,6 +139,9 @@ export function createKaryaMCPServer() {
       delegateToCoderAgent,
       delegateToResearcherAgent,
       delegateToDataAnalystAgent,
+      passContextToAgent,
+      agentHandoffTool,
+      codeReviewTool,
 
       // === Planning (4) ===
       createPlanTool,

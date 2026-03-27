@@ -69,6 +69,10 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   "log-recovery": { icon: "✅", label: "Recovery Logged", runText: "Logging recovery..." },
   // Confidence
   "confidence-check": { icon: "🎯", label: "Confidence Check", runText: "Assessing confidence..." },
+  // Agent Communication
+  "pass-context": { icon: "📤", label: "Pass Context", runText: "Passing data to agent..." },
+  "agent-handoff": { icon: "🔗", label: "Agent Handoff", runText: "Chaining agents..." },
+  "code-review": { icon: "🔍", label: "Code Review", runText: "Reviewing code..." },
 };
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };
