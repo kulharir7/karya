@@ -48,6 +48,10 @@ export type KaryaEvent =
   // Workflow events
   | "workflow:created"     // workflow run created
   | "workflow:updated"     // workflow run status updated
+  // Trigger events
+  | "trigger:created"      // trigger was created
+  | "trigger:fired"        // trigger was fired
+  | "trigger:deleted"      // trigger was deleted
   | "workflow:deleted"     // workflow run deleted
   // Custom events (for user plugins)
   | `custom:${string}`;
