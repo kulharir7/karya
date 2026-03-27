@@ -1,15 +1,12 @@
 /**
- * Karya Memory System — Semantic Recall with Vector Search
+ * Karya Memory System — Conversation Memory with Mastra
  * 
- * Uses Mastra's official Memory class with:
- * - LibSQLStore for message storage
- * - LibSQLVector for vector embeddings
- * - FastEmbed for local embeddings (no API key needed)
+ * Uses Mastra's official Memory class with LibSQLStore.
+ * Semantic recall disabled for now (requires embedding model setup).
  */
 
 import { Memory } from "@mastra/memory";
-import { LibSQLStore, LibSQLVector } from "@mastra/libsql";
-import { fastembed } from "@mastra/fastembed";
+import { LibSQLStore } from "@mastra/libsql";
 
 // Storage for messages
 const storage = new LibSQLStore({
@@ -17,55 +14,52 @@ const storage = new LibSQLStore({
   url: "file:karya-memory.db",
 });
 
-// Vector DB for semantic search
-const vector = new LibSQLVector({
-  id: "karya-vector",
-  url: "file:karya-memory.db", // Same DB file for simplicity
-});
-
-// Create memory with semantic recall enabled
+// Create memory WITHOUT semantic recall (for now)
+// TODO: Enable semantic recall once embedding model is configured
 export const memory = new Memory({
   storage,
-  vector,
-  // Use FastEmbed for LOCAL embeddings (no API key required!)
-  embedder: fastembed,
   options: {
     // Recent message history
     lastMessages: 20,
-    // Semantic recall configuration
-    semanticRecall: {
-      topK: 5,           // Retrieve 5 most similar messages
-      messageRange: 2,   // Include 2 messages before/after each match
-      scope: "thread",   // Search within current thread (or "resource" for all threads)
-    },
+    // Semantic recall disabled (needs embedder)
+    semanticRecall: false,
   },
 });
 
 /**
- * Search memory semantically
- * Returns messages similar to the query
+ * Get recent messages from a thread
+ */
+export async function getThreadMessages(
+  threadId: string,
+  limit: number = 20
+): Promise<any[]> {
+  try {
+    const result = await memory.query({
+      threadId,
+      selectBy: {
+        last: limit,
+      },
+    });
+    return result.messages || [];
+  } catch (error) {
+    console.error("Memory query error:", error);
+    return [];
+  }
+}
+
+/**
+ * Semantic search placeholder
+ * For now, falls back to workspace memory search
  */
 export async function semanticSearch(
   threadId: string,
   query: string,
   topK: number = 5
 ): Promise<any[]> {
-  try {
-    const result = await memory.recall({
-      threadId,
-      vectorSearchString: query,
-      threadConfig: {
-        semanticRecall: {
-          topK,
-          messageRange: 2,
-        },
-      },
-    });
-    return result.messages || [];
-  } catch (error) {
-    console.error("Semantic search error:", error);
-    return [];
-  }
+  // Fall back to getting recent messages
+  // Real semantic search requires embedding model
+  console.log(`[memory] Semantic search fallback for: "${query}"`);
+  return getThreadMessages(threadId, topK * 2);
 }
 
 /**
