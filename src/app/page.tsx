@@ -83,32 +83,70 @@ function SidebarNavLink({ icon, label, href, active }: { icon: React.ReactNode; 
   );
 }
 
-// ─── Thinking Indicator (Point 53) ───
-function ThinkingIndicator({ agent }: { agent: { agent: string; confidence: number; reason: string } | null }) {
+// ─── Thinking Indicator ───
+function ThinkingIndicator({ agent, currentTool }: { 
+  agent: { agent: string; confidence: number; reason: string } | null;
+  currentTool?: string;
+}) {
   const [phase, setPhase] = useState(0);
-  const phases = agent
-    ? [
-        `${agent.reason}...`,
-        agent.agent === "browser" ? "Opening browser..." : agent.agent === "coder" ? "Writing code..." : agent.agent === "file" ? "Checking files..." : "Processing...",
-        "Almost there...",
-      ]
-    : ["Analyzing your request...", "Thinking...", "Searching memory...", "Planning approach...", "Preparing response..."];
+  const [dots, setDots] = useState(1);
+  
+  const agentEmoji: Record<string, string> = {
+    browser: "🌐", file: "📁", coder: "💻", researcher: "🔍", "data-analyst": "📊", supervisor: "⚡"
+  };
+  
+  const agentLabel: Record<string, string> = {
+    browser: "Browser Agent", file: "File Agent", coder: "Coder Agent", 
+    researcher: "Research Agent", "data-analyst": "Data Analyst", supervisor: "Karya"
+  };
+
+  const phases = agent?.reason
+    ? [agent.reason]
+    : currentTool
+    ? [`Using ${currentTool}`]
+    : ["Analyzing request", "Thinking", "Planning approach", "Preparing response"];
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPhase(p => (p + 1) % phases.length);
-    }, 2500);
-    return () => clearInterval(interval);
+    const phaseInterval = setInterval(() => setPhase(p => (p + 1) % phases.length), 3000);
+    const dotsInterval = setInterval(() => setDots(d => (d % 3) + 1), 500);
+    return () => { clearInterval(phaseInterval); clearInterval(dotsInterval); };
   }, [phases.length]);
 
   return (
-    <div className="flex items-center gap-2.5 py-2">
-      <div className="flex gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+    <div className="flex items-center gap-3 py-3 px-4 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)] animate-fade-in">
+      {/* Animated spinner */}
+      <div className="relative w-8 h-8">
+        <div className="absolute inset-0 rounded-full border-2 border-[var(--accent)]/20" />
+        <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[var(--accent)] animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center text-sm">
+          {agent ? agentEmoji[agent.agent] || "⚡" : "🧠"}
+        </div>
       </div>
-      <span className="text-xs text-gray-400 transition-all duration-300">{phases[phase]}</span>
+      
+      {/* Status text */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-[var(--text-primary)]">
+            {agent ? agentLabel[agent.agent] || "Processing" : "Karya"}
+          </span>
+          {agent && agent.confidence && (
+            <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-secondary)] px-1.5 py-0.5 rounded">
+              {Math.round(agent.confidence * 100)}% confidence
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-[var(--text-muted)] truncate">
+          {phases[phase]}{".".repeat(dots)}
+        </div>
+      </div>
+      
+      {/* Current tool indicator */}
+      {currentTool && (
+        <div className="flex items-center gap-1.5 text-xs text-[var(--accent)] bg-[var(--accent-light)] px-2 py-1 rounded-full">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+          {currentTool}
+        </div>
+      )}
     </div>
   );
 }
@@ -637,25 +675,62 @@ export default function Home() {
         <div ref={chatContainerRef} className="flex-1 overflow-y-auto bg-[var(--bg-primary)] relative">
           {messages.length === 0 && !streamingText ? (
             <div className="flex flex-col items-center justify-center h-full px-6">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-xl mb-4 shadow-md">⚡</div>
-              <h2 className="text-lg font-semibold text-gray-800 mb-1">What should I do?</h2>
-              <p className="text-sm text-gray-400 mb-6">Execute tasks • Browse web • Manage files • Run commands</p>
-              <div className="grid grid-cols-3 gap-2.5 max-w-xl w-full">
+              {/* Hero */}
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-3xl mb-5 shadow-xl shadow-purple-500/20">⚡</div>
+              <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2">What should I do?</h2>
+              <p className="text-sm text-[var(--text-muted)] mb-8 text-center max-w-md">
+                I can execute real tasks on your computer — browse the web, manage files, run commands, and more.
+              </p>
+              
+              {/* Quick Actions */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-w-2xl w-full">
                 {[
-                  { icon: "💻", text: "System info batao" },
-                  { icon: "📁", text: "Desktop pe kya files hain?" },
-                  { icon: "🔍", text: "Search 'Mastra AI'" },
-                  { icon: "🕐", text: "Aaj kya date aur time hai?" },
-                  { icon: "📊", text: "Top 10 running processes dikhao" },
-                  { icon: "📋", text: "Clipboard mein kya hai?" },
+                  { icon: "💻", text: "System info batao", desc: "OS, CPU, RAM" },
+                  { icon: "📁", text: "Desktop files dikhao", desc: "List files" },
+                  { icon: "🔍", text: "Web search karo", desc: "DuckDuckGo" },
+                  { icon: "🕐", text: "Time kya hai?", desc: "Date & time" },
+                  { icon: "📊", text: "Running processes", desc: "Top 10" },
+                  { icon: "📋", text: "Clipboard content", desc: "Read clipboard" },
                 ].map((ex, i) => (
-                  <button key={i} onClick={() => quickSend(ex.text)} className="text-left p-3 rounded-lg border border-gray-200 bg-white hover:border-purple-300 hover:shadow-sm transition-all">
-                    <span className="text-base">{ex.icon}</span>
-                    <p className="text-xs text-gray-500 mt-1">{ex.text}</p>
+                  <button 
+                    key={i} 
+                    onClick={() => quickSend(ex.text)} 
+                    className="group text-left p-4 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--accent)] hover:shadow-lg hover:shadow-purple-500/5 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl group-hover:scale-110 transition-transform">{ex.icon}</span>
+                      <div>
+                        <p className="text-sm font-medium text-[var(--text-primary)]">{ex.text}</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">{ex.desc}</p>
+                      </div>
+                    </div>
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-gray-300 mt-4">Drag & drop files • Ctrl+K for commands</p>
+              
+              {/* Stats */}
+              <div className="flex items-center gap-6 mt-8 text-[11px] text-[var(--text-muted)]">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  73 tools available
+                </span>
+                <span>•</span>
+                <span>9 workflows</span>
+                <span>•</span>
+                <span>6 skills</span>
+              </div>
+              
+              {/* Shortcuts hint */}
+              <div className="flex items-center gap-4 mt-4 text-[10px] text-[var(--text-muted)]">
+                <span className="flex items-center gap-1">
+                  <kbd className="bg-[var(--bg-tertiary)] border border-[var(--border)] px-1.5 py-0.5 rounded">Ctrl+K</kbd>
+                  Commands
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="bg-[var(--bg-tertiary)] border border-[var(--border)] px-1.5 py-0.5 rounded">Drop</kbd>
+                  Files
+                </span>
+              </div>
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-5 py-5 space-y-4">
@@ -741,7 +816,10 @@ export default function Home() {
                       </div>
                     )}
                     {isLoading && !streamingText && streamingTools.length === 0 && (
-                      <ThinkingIndicator agent={activeAgent} />
+                      <ThinkingIndicator 
+                        agent={activeAgent} 
+                        currentTool={streamingTools.length > 0 ? streamingTools[streamingTools.length - 1]?.toolName : undefined}
+                      />
                     )}
                   </div>
                 </div>
@@ -786,19 +864,33 @@ export default function Home() {
                 ))}
               </div>
             )}
-            <div className="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus-within:border-purple-400 focus-within:ring-2 focus-within:ring-purple-100 transition-all">
-              <label className="cursor-pointer text-gray-400 hover:text-gray-600 transition-colors shrink-0 pb-0.5">
+            <div className="chat-input flex items-end gap-3 px-4 py-3">
+              {/* Attach button */}
+              <label className="cursor-pointer text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors shrink-0 pb-1">
                 <input type="file" className="hidden" multiple accept="image/*,.pdf,.txt,.json,.csv,.md" onChange={(e) => e.target.files && handleFileDrop(e.target.files)} />
-                📎
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                </svg>
               </label>
+              
+              {/* Input */}
               <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-                placeholder={pendingImages.length > 0 ? "Describe what you want to know about this image..." : "Message Karya... (Enter to send, Ctrl+K for commands)"}
+                placeholder={pendingImages.length > 0 ? "Describe what you want to know about this image..." : "Message Karya..."}
                 rows={1} disabled={isLoading}
-                className="flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none resize-none disabled:opacity-50"
-                style={{ minHeight: "24px", maxHeight: "100px" }} />
+                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none resize-none disabled:opacity-50"
+                style={{ minHeight: "24px", maxHeight: "120px" }} />
+              
+              {/* Keyboard shortcut hint */}
+              {!input && !isLoading && (
+                <div className="hidden md:flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] shrink-0 pb-1">
+                  <kbd className="bg-[var(--bg-tertiary)] border border-[var(--border)] px-1.5 py-0.5 rounded">⌘K</kbd>
+                </div>
+              )}
+              
+              {/* Send button */}
               <button type="submit" disabled={isLoading || (!input.trim() && pendingImages.length === 0)}
-                className="w-7 h-7 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center disabled:opacity-30 transition-all shrink-0 shadow-sm">
-                {isLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/40 border-t-white animate-spin" /> :
+                className="w-9 h-9 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white flex items-center justify-center disabled:opacity-30 transition-all shrink-0 shadow-sm shadow-purple-500/20">
+                {isLoading ? <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> :
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M14 2L7 9M14 2L9.5 14L7 9M14 2L2 6.5L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
               </button>
             </div>
