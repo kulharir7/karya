@@ -543,7 +543,7 @@ export default function Home() {
 
           {/* ─── CHATS ─── */}
           <SidebarSection title="CHATS" defaultOpen={true} action={
-            <button onClick={newSession} className="text-[#5a5a72] hover:text-white transition-colors">
+            <button onClick={newSession} className="text-[var(--sidebar-text-muted)] hover:text-[var(--text-primary)] transition-colors">
               {icons.plus}
             </button>
           }>
@@ -558,7 +558,7 @@ export default function Home() {
               />
             ))}
             {sessions.length === 0 && (
-              <div className="px-4 py-2 text-[11px] text-[#5a5a72]">No chats yet</div>
+              <div className="px-4 py-2 text-[11px] text-[var(--sidebar-text-muted)]">No chats yet</div>
             )}
           </SidebarSection>
 

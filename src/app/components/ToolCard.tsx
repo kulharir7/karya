@@ -75,7 +75,6 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   "git-push": { icon: "🚀", label: "Git Push", runText: "Pushing to remote..." },
   "git-log": { icon: "📜", label: "Git Log", runText: "Loading commit history..." },
   "git-diff": { icon: "📝", label: "Git Diff", runText: "Checking changes..." },
-  // Skills
   "skill-list": { icon: "📚", label: "List Skills", runText: "Listing skills..." },
   "skill-match": { icon: "🔍", label: "Match Skills", runText: "Finding matching skills..." },
   "skill-load": { icon: "📖", label: "Load Skill", runText: "Loading skill instructions..." },
@@ -84,19 +83,11 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };
 
-// Tools that should completely hide their output (internal use only)
 const HIDE_OUTPUT_TOOLS = new Set([
-  "memory-search",        // internal search results
-  "memory-read",          // agent uses it, user doesn't need raw
-  "pass-context",         // internal agent data
-  "confidence-check",     // internal confidence score
-  "suggest-recovery",     // internal recovery suggestions
-  "log-recovery",         // internal logging
-  "skill-load",           // skill instructions are internal
-  "skill-match",          // internal matching results
+  "memory-search", "memory-read", "pass-context", "confidence-check",
+  "suggest-recovery", "log-recovery", "skill-load", "skill-match",
 ]);
 
-// Tools that show minimal output (just success/fail + key info)
 const MINIMAL_OUTPUT_TOOLS: Record<string, (result: any) => string> = {
   "system-screenshot": (r) => r?.success ? `📸 Screen captured (${r.width}×${r.height})` : "❌ Screenshot failed",
   "browser-screenshot": (r) => r?.success ? `📸 Page captured` : "❌ Screenshot failed",
@@ -111,20 +102,14 @@ const MINIMAL_OUTPUT_TOOLS: Record<string, (result: any) => string> = {
   "git-push": (r) => r?.success ? `✅ Pushed to remote` : "❌ Push failed",
   "task-schedule": (r) => r?.success ? `⏰ Task scheduled: ${r.taskId || 'done'}` : "❌ Schedule failed",
   "task-cancel": (r) => r?.success ? `✅ Task cancelled` : "❌ Cancel failed",
-  // Skills
   "skill-list": (r) => `📚 ${r?.count || r?.skills?.length || 0} skills available`,
   "skill-create": (r) => r?.success ? `✨ Skill created: ${r.skillName}` : "❌ Skill creation failed",
-  // Web/Browser
   "web-search": (r) => r?.results?.length ? `🔍 Found ${r.results.length} results` : "🔍 Search completed",
   "browser-navigate": (r) => r?.success ? `🌐 Opened: ${r.url?.slice(0, 50)}...` : "❌ Navigation failed",
   "browser-extract": (r) => r?.success ? `📊 Data extracted` : "❌ Extraction failed",
 };
 
-/**
- * Format tool output for display — clean key-value pairs
- */
 function formatOutput(result: any): { type: 'text' | 'table' | 'minimal'; content: string | Array<{key: string; value: string}> } {
-  // If it's already a string, try to parse as JSON
   if (typeof result === "string") {
     try {
       const parsed = JSON.parse(result);
@@ -136,45 +121,34 @@ function formatOutput(result: any): { type: 'text' | 'table' | 'minimal'; conten
       return { type: 'text', content: result.slice(0, 2000) };
     }
   }
-  
-  // If it's an object, convert to key-value
   if (typeof result === "object" && result !== null && !Array.isArray(result)) {
     return { type: 'table', content: objectToKeyValue(result) };
   }
-  
   return { type: 'text', content: String(result).slice(0, 2000) };
 }
 
 function objectToKeyValue(obj: Record<string, any>): Array<{key: string; value: string}> {
   return Object.entries(obj).map(([key, value]) => {
-    // Format key: camelCase → Title Case
     const displayKey = key
       .replace(/([a-z])([A-Z])/g, '$1 $2')
       .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
       .replace(/^./, s => s.toUpperCase())
       .trim();
     
-    // Format value
     let displayValue: string;
     if (typeof value === "object" && value !== null) {
       displayValue = JSON.stringify(value);
     } else if (typeof value === "number") {
-      if (key.toLowerCase().includes("memory") && value < 100) {
-        displayValue = `${value.toFixed(1)} GB`;
-      } else {
-        displayValue = value.toLocaleString();
-      }
+      displayValue = value.toLocaleString();
     } else if (typeof value === "boolean") {
       displayValue = value ? "Yes" : "No";
     } else {
       displayValue = String(value);
     }
-    
     return { key: displayKey, value: displayValue };
   });
 }
 
-// Risk badge component
 function RiskBadge({ risk }: { risk: RiskLevel }) {
   const display = getRiskDisplay(risk);
   return (
@@ -193,17 +167,16 @@ export default function ToolCard({ toolName, status, args, result, showRisk = tr
   const riskLevel = getRiskLevel(toolName);
   const isDangerous = requiresConfirmation(toolName);
   const isRunning = status === "running";
+  const isError = status === "error";
   const hasResult = result !== undefined && result !== null;
   
-  // Check if this tool should hide or minimize output
   const shouldHideOutput = HIDE_OUTPUT_TOOLS.has(toolName);
   const minimalFormatter = MINIMAL_OUTPUT_TOOLS[toolName];
   
-  // Format output based on tool type
   let output: { type: 'text' | 'table' | 'minimal'; content: string | Array<{key: string; value: string}> } | null = null;
   if (hasResult) {
     if (shouldHideOutput) {
-      output = null; // Completely hide
+      output = null;
     } else if (minimalFormatter) {
       output = { type: 'minimal', content: minimalFormatter(result) };
     } else {
@@ -211,23 +184,34 @@ export default function ToolCard({ toolName, status, args, result, showRisk = tr
     }
   }
 
+  // Dynamic classes using CSS variables
+  const cardClasses = `rounded-xl overflow-hidden my-2 border transition-all ${
+    isError
+      ? "border-[var(--error)] bg-[var(--error-light)]"
+      : isDangerous && isRunning
+      ? "border-[var(--error)] bg-[var(--error-light)]"
+      : isRunning
+      ? "border-[var(--warning)] bg-[var(--warning-light)]"
+      : isDangerous
+      ? "border-[var(--error)] border-opacity-50 bg-[var(--bg-tertiary)]"
+      : "border-[var(--border)] bg-[var(--bg-tertiary)]"
+  }`;
+
   return (
-    <div className={`rounded-xl overflow-hidden my-2 border ${
-      isDangerous && isRunning
-        ? "border-red-300 bg-gradient-to-r from-red-50 to-orange-50"
-        : isRunning
-        ? "border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50"
-        : isDangerous
-        ? "border-red-200 bg-white"
-        : "border-gray-200 bg-white"
-    }`}>
+    <div className={cardClasses}>
       {/* Header */}
       <div className="flex items-center gap-2.5 px-4 py-3">
         {/* Status icon */}
         {isRunning ? (
-          <div className="w-5 h-5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin shrink-0" />
+          <div className="w-5 h-5 rounded-full border-2 border-[var(--warning)] border-t-transparent animate-spin shrink-0" />
+        ) : isError ? (
+          <div className="w-5 h-5 rounded-full bg-[var(--error)] flex items-center justify-center shrink-0">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path d="M3 3L9 9M9 3L3 9" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </div>
         ) : (
-          <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center shrink-0">
+          <div className="w-5 h-5 rounded-full bg-[var(--success)] flex items-center justify-center shrink-0">
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
               <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -237,9 +221,11 @@ export default function ToolCard({ toolName, status, args, result, showRisk = tr
         {/* Tool name */}
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <span className="text-base">{meta.icon}</span>
-          <span className="text-sm font-medium text-gray-800">
+          <span className="text-sm font-medium text-[var(--text-primary)]">
             {isRunning ? (
-              <span className="text-amber-700">{meta.runText}</span>
+              <span className="text-[var(--warning)]">{meta.runText}</span>
+            ) : isError ? (
+              <span className="text-[var(--error)]">{meta.label} — Failed</span>
             ) : (
               meta.label
             )}
@@ -252,53 +238,38 @@ export default function ToolCard({ toolName, status, args, result, showRisk = tr
 
       {/* Dangerous tool warning banner */}
       {isDangerous && isRunning && (
-        <div className="px-4 py-2 bg-red-100 border-t border-red-200 flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div className="px-4 py-2 bg-[var(--error-light)] border-t border-[var(--error)] flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--error)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
             <line x1="12" y1="9" x2="12" y2="13"/>
             <line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
-          <span className="text-xs font-medium text-red-700">
+          <span className="text-xs font-medium text-[var(--error)]">
             ⚠️ Dangerous operation in progress — this action may modify your system
           </span>
         </div>
       )}
 
-      {/* Dangerous tool executed notice */}
-      {isDangerous && !isRunning && hasResult && (
-        <div className="px-4 py-2 bg-red-50 border-t border-red-100 flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <span className="text-xs text-red-600">
-            This was a dangerous operation. Review the output carefully.
-          </span>
-        </div>
-      )}
-
-      {/* Output — always visible when done */}
+      {/* Output */}
       {hasResult && output && (
-        <div className="border-t border-gray-100 bg-gray-50/50">
+        <div className="border-t border-[var(--border)] bg-[var(--bg-secondary)]">
           {output.type === 'minimal' ? (
-            // Minimal output — single line status
             <div className="px-4 py-2.5">
-              <span className="text-sm text-gray-700">{output.content as string}</span>
+              <span className="text-sm text-[var(--text-secondary)]">{output.content as string}</span>
             </div>
           ) : output.type === 'table' ? (
             <div className="px-4 py-3">
               <div className="space-y-1.5">
                 {(output.content as Array<{key: string; value: string}>).map(({ key, value }, i) => (
                   <div key={i} className="flex gap-3 text-sm">
-                    <span className="text-gray-500 min-w-[120px] shrink-0">{key}</span>
-                    <span className="text-gray-800 font-medium break-all">{value}</span>
+                    <span className="text-[var(--text-muted)] min-w-[120px] shrink-0">{key}</span>
+                    <span className="text-[var(--text-primary)] font-medium break-all">{value}</span>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <pre className="px-4 py-3 text-xs text-gray-700 font-mono overflow-x-auto max-h-48 whitespace-pre-wrap break-words">
+            <pre className="px-4 py-3 text-xs text-[var(--text-secondary)] font-mono overflow-x-auto max-h-48 whitespace-pre-wrap break-words">
               {output.content as string}
             </pre>
           )}

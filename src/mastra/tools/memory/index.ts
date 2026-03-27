@@ -9,7 +9,7 @@ import {
   listMemoryFiles,
   readLongTermMemory,
 } from "@/lib/memory-engine";
-import { semanticSearch } from "@/lib/memory";
+// Note: semantic-memory is imported dynamically in memoryRecallTool
 
 /**
  * Memory Search — semantic search across workspace memory files.

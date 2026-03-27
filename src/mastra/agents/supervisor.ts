@@ -1,17 +1,21 @@
 import { Agent } from "@mastra/core/agent";
 import { getModel } from "@/lib/llm";
-import { createBasicMemory, createFastEmbedMemory } from "@/lib/semantic-memory";
+import { createBasicMemory, getBestMemory } from "@/lib/semantic-memory";
 import { buildSystemPrompt, ensureWorkspace } from "@/lib/system-prompt";
+import { logger } from "@/lib/logger";
 
-// Create memory instance — try FastEmbed first, fallback to basic
+// Create memory instance — start with basic, async upgrade to best available
 let memory = createBasicMemory();
+let memoryUpgraded = false;
 
-// Async upgrade to FastEmbed (will be used after first call)
+// Async upgrade to best available (OpenAI > FastEmbed > Basic)
 (async () => {
-  const fastEmbedMemory = await createFastEmbedMemory();
-  if (fastEmbedMemory) {
-    memory = fastEmbedMemory;
-    console.log("[supervisor] Upgraded to FastEmbed semantic memory");
+  try {
+    memory = await getBestMemory();
+    memoryUpgraded = true;
+    logger.info("supervisor", "Memory initialized with best available embeddings");
+  } catch (err) {
+    logger.warn("supervisor", "Memory upgrade failed, using basic memory", err);
   }
 })();
 
