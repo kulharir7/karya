@@ -47,6 +47,12 @@ import {
   delegateToResearcherAgent, delegateToDataAnalystAgent,
 } from "../tools/agents";
 
+// Planning tools (Point 5)
+import { createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusTool } from "../tools/planning";
+
+// Error Recovery tools (Point 7)
+import { suggestRecoveryTool, logRecoveryTool } from "../tools/recovery";
+
 /**
  * Karya MCP Server — exposes ALL 32 tools to external MCP clients.
  * 
@@ -129,6 +135,16 @@ export function createKaryaMCPServer() {
       delegateToCoderAgent,
       delegateToResearcherAgent,
       delegateToDataAnalystAgent,
+
+      // === Planning (4) ===
+      createPlanTool,
+      executePlanStepTool,
+      reviewOutputTool,
+      getPlanStatusTool,
+
+      // === Error Recovery (2) ===
+      suggestRecoveryTool,
+      logRecoveryTool,
     },
   });
 }

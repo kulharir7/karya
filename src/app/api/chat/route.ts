@@ -71,6 +71,14 @@ const TOOL_NAME_MAP: Record<string, string> = {
   delegateToCoderAgent: "delegate-coder-agent",
   delegateToResearcherAgent: "delegate-researcher-agent",
   delegateToDataAnalystAgent: "delegate-data-analyst-agent",
+  // Planning
+  createPlanTool: "create-plan",
+  executePlanStepTool: "execute-plan-step",
+  reviewOutputTool: "review-output",
+  getPlanStatusTool: "get-plan-status",
+  // Error Recovery
+  suggestRecoveryTool: "suggest-recovery",
+  logRecoveryTool: "log-recovery",
 };
 
 function resolveToolName(raw: string): string {

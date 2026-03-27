@@ -43,6 +43,30 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   "data-csv-parse": { icon: "📊", label: "Parse CSV", runText: "Parsing CSV..." },
   "data-json-query": { icon: "🔎", label: "Query JSON", runText: "Querying JSON..." },
   "data-transform": { icon: "🔄", label: "Transform Data", runText: "Transforming data..." },
+  // Memory
+  "memory-search": { icon: "🧠", label: "Search Memory", runText: "Searching memory..." },
+  "memory-read": { icon: "📖", label: "Read Memory", runText: "Reading memory..." },
+  "memory-write": { icon: "✏️", label: "Write Memory", runText: "Saving to memory..." },
+  "memory-log": { icon: "📝", label: "Log Activity", runText: "Logging activity..." },
+  "memory-list": { icon: "📋", label: "List Memory", runText: "Listing memory files..." },
+  // Scheduler
+  "task-schedule": { icon: "⏰", label: "Schedule Task", runText: "Scheduling task..." },
+  "task-list": { icon: "📋", label: "List Tasks", runText: "Listing tasks..." },
+  "task-cancel": { icon: "❌", label: "Cancel Task", runText: "Cancelling task..." },
+  // Delegation
+  "delegate-browser-agent": { icon: "🌐", label: "Browser Agent", runText: "Delegating to Browser Agent..." },
+  "delegate-file-agent": { icon: "📁", label: "File Agent", runText: "Delegating to File Agent..." },
+  "delegate-coder-agent": { icon: "💻", label: "Coder Agent", runText: "Delegating to Coder Agent..." },
+  "delegate-researcher-agent": { icon: "🔍", label: "Researcher", runText: "Delegating to Researcher..." },
+  "delegate-data-analyst-agent": { icon: "📊", label: "Data Analyst", runText: "Delegating to Data Analyst..." },
+  // Planning
+  "create-plan": { icon: "📋", label: "Create Plan", runText: "Planning approach..." },
+  "execute-plan-step": { icon: "▶️", label: "Execute Step", runText: "Executing step..." },
+  "review-output": { icon: "🔍", label: "Self-Review", runText: "Reviewing output quality..." },
+  "get-plan-status": { icon: "📊", label: "Plan Status", runText: "Checking plan..." },
+  // Recovery
+  "suggest-recovery": { icon: "🔄", label: "Find Alternative", runText: "Finding alternative approach..." },
+  "log-recovery": { icon: "✅", label: "Recovery Logged", runText: "Logging recovery..." },
 };
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };

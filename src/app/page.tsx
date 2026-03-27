@@ -97,6 +97,36 @@ function SidebarNavLink({ icon, label, href, active }: { icon: React.ReactNode; 
   );
 }
 
+// ─── Thinking Indicator (Point 53) ───
+function ThinkingIndicator({ agent }: { agent: { agent: string; confidence: number; reason: string } | null }) {
+  const [phase, setPhase] = useState(0);
+  const phases = agent
+    ? [
+        `${agent.reason}...`,
+        agent.agent === "browser" ? "Opening browser..." : agent.agent === "coder" ? "Writing code..." : agent.agent === "file" ? "Checking files..." : "Processing...",
+        "Almost there...",
+      ]
+    : ["Analyzing your request...", "Thinking...", "Searching memory...", "Planning approach...", "Preparing response..."];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPhase(p => (p + 1) % phases.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [phases.length]);
+
+  return (
+    <div className="flex items-center gap-2.5 py-2">
+      <div className="flex gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+      </div>
+      <span className="text-xs text-gray-400 transition-all duration-300">{phases[phase]}</span>
+    </div>
+  );
+}
+
 interface Session {
   id: string;
   name: string;
@@ -489,7 +519,9 @@ export default function Home() {
             {isLoading && (
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
-                <span className="text-xs text-purple-600 font-medium">Working...</span>
+                <span className="text-xs text-purple-600 font-medium">
+                  {streamingTools.length > 0 ? `Using ${streamingTools[streamingTools.length-1]?.toolName}...` : streamingText ? "Generating..." : "Thinking..."}
+                </span>
               </div>
             )}
             {/* Session switcher dropdown */}
@@ -614,16 +646,7 @@ export default function Home() {
                     {streamingTools.map((t, i) => <ToolCard key={i} toolName={t.toolName} status={t.status} args={t.args} result={t.result} />)}
                     {streamingText && <div className="mt-1"><MessageContent content={streamingText} /><span className="inline-block w-0.5 h-4 bg-purple-500 animate-pulse rounded-sm ml-0.5 align-text-bottom" /></div>}
                     {isLoading && !streamingText && streamingTools.length === 0 && (
-                      <div className="flex items-center gap-2 py-1">
-                        <div className="flex gap-1 animate-thinking">
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                        </div>
-                        <span className="text-xs text-gray-400">
-                          {activeAgent ? `${activeAgent.reason}...` : "Thinking..."}
-                        </span>
-                      </div>
+                      <ThinkingIndicator agent={activeAgent} />
                     )}
                   </div>
                 </div>
