@@ -1,7 +1,10 @@
 import { Agent } from "@mastra/core/agent";
 import { getModel } from "@/lib/llm";
-import { memory } from "@/lib/memory";
+import { createBasicMemory } from "@/lib/semantic-memory";
 import { buildSystemPrompt, ensureWorkspace } from "@/lib/system-prompt";
+
+// Create memory instance (basic for now, can upgrade to semantic later)
+const memory = createBasicMemory();
 
 // Ensure workspace exists with default files on startup
 ensureWorkspace();

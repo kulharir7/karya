@@ -145,19 +145,19 @@ export const memoryListTool = createTool({
 
 /**
  * Semantic Memory Recall — RAG-based search across conversation history.
- * NOTE: Currently returns empty results (Mastra Memory v2 requires embedder setup).
- * Use memory-search for text-based search instead.
+ * Uses vector embeddings for similarity search (requires embedder).
  */
 export const memoryRecallTool = createTool({
   id: "memory-recall",
   description:
-    "⚠️ EXPERIMENTAL — Semantic search through past conversations. " +
-    "Currently limited — use memory-search instead for reliable results. " +
-    "Will be improved when embedding model is configured.",
+    "Semantic search through past conversations using AI embeddings. " +
+    "Finds messages by MEANING, not just keywords. Use when you need to recall what " +
+    "the user said about a topic, or find related discussions across sessions. " +
+    "Requires embeddings to be configured (OpenAI or FastEmbed).",
   inputSchema: z.object({
-    query: z.string().describe("What to search for — can be natural language, questions, or topics"),
+    query: z.string().describe("What to search for — natural language question or topic"),
     threadId: z.string().optional().describe("Session/thread ID to search in. Leave empty for current session."),
-    topK: z.number().optional().describe("Number of results to return (default 5)"),
+    topK: z.number().optional().describe("Number of similar messages to return (default 5)"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -168,15 +168,21 @@ export const memoryRecallTool = createTool({
     })),
     count: z.number(),
     query: z.string(),
+    embeddingsEnabled: z.boolean(),
   }),
   execute: async ({ query, threadId, topK }) => {
     try {
-      // Use default thread if not specified
+      // Dynamic import to avoid circular dependencies
+      const { getMemoryInstance, semanticRecall } = await import("@/lib/semantic-memory");
+      
+      const memory = await getMemoryInstance();
       const thread = threadId || "default";
-      const messages = await semanticSearch(thread, query, topK || 5);
+      const messages = await semanticRecall(memory, thread, query, { topK: topK || 5 });
+      
+      const hasResults = messages.length > 0;
       
       return {
-        success: true,
+        success: hasResults,
         messages: messages.map((m: any) => ({
           role: m.role || "unknown",
           content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
@@ -184,6 +190,7 @@ export const memoryRecallTool = createTool({
         })),
         count: messages.length,
         query,
+        embeddingsEnabled: true,
       };
     } catch (error: any) {
       return {
@@ -191,6 +198,7 @@ export const memoryRecallTool = createTool({
         messages: [],
         count: 0,
         query,
+        embeddingsEnabled: false,
       };
     }
   },
