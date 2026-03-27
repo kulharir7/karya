@@ -74,6 +74,11 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   "git-push": { icon: "🚀", label: "Git Push", runText: "Pushing to remote..." },
   "git-log": { icon: "📜", label: "Git Log", runText: "Loading commit history..." },
   "git-diff": { icon: "📝", label: "Git Diff", runText: "Checking changes..." },
+  // Skills
+  "skill-list": { icon: "📚", label: "List Skills", runText: "Listing skills..." },
+  "skill-match": { icon: "🔍", label: "Match Skills", runText: "Finding matching skills..." },
+  "skill-load": { icon: "📖", label: "Load Skill", runText: "Loading skill instructions..." },
+  "skill-create": { icon: "✨", label: "Create Skill", runText: "Creating new skill..." },
 };
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };
@@ -86,6 +91,8 @@ const HIDE_OUTPUT_TOOLS = new Set([
   "confidence-check",     // internal confidence score
   "suggest-recovery",     // internal recovery suggestions
   "log-recovery",         // internal logging
+  "skill-load",           // skill instructions are internal
+  "skill-match",          // internal matching results
 ]);
 
 // Tools that show minimal output (just success/fail + key info)
@@ -96,12 +103,16 @@ const MINIMAL_OUTPUT_TOOLS: Record<string, (result: any) => string> = {
   "code-write": (r) => r?.success ? `✅ Code saved: ${r.path || r.filePath || 'file'}` : "❌ Write failed",
   "memory-write": (r) => r?.success ? `✅ Saved to memory` : "❌ Memory write failed",
   "memory-log": (r) => r?.success ? `✅ Logged to daily memory` : "❌ Log failed",
+  "memory-list": (r) => r?.files ? `📋 ${r.files.length} memory files` : "📋 Memory files listed",
   "clipboard-write": (r) => r?.success ? `✅ Copied to clipboard` : "❌ Clipboard write failed",
   "system-notify": (r) => r?.success ? `🔔 Notification sent` : "❌ Notification failed",
   "git-commit": (r) => r?.success ? `✅ Committed: ${r.commitHash?.slice(0, 7) || 'done'}` : "❌ Commit failed",
   "git-push": (r) => r?.success ? `✅ Pushed to remote` : "❌ Push failed",
   "task-schedule": (r) => r?.success ? `⏰ Task scheduled: ${r.taskId || 'done'}` : "❌ Schedule failed",
   "task-cancel": (r) => r?.success ? `✅ Task cancelled` : "❌ Cancel failed",
+  // Skills
+  "skill-list": (r) => `📚 ${r?.count || r?.skills?.length || 0} skills available`,
+  "skill-create": (r) => r?.success ? `✨ Skill created: ${r.skillName}` : "❌ Skill creation failed",
 };
 
 /**

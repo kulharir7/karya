@@ -91,6 +91,11 @@ const TOOL_NAME_MAP: Record<string, string> = {
   gitPushTool: "git-push",
   gitLogTool: "git-log",
   gitDiffTool: "git-diff",
+  // Skills
+  skillListTool: "skill-list",
+  skillMatchTool: "skill-match",
+  skillLoadTool: "skill-load",
+  skillCreateTool: "skill-create",
 };
 
 function resolveToolName(raw: string): string {

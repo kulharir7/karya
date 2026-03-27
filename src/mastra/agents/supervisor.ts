@@ -30,6 +30,7 @@ import { createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusToo
 import { suggestRecoveryTool, logRecoveryTool } from "../tools/recovery";
 import { confidenceCheckTool } from "../tools/confidence";
 import { gitStatusTool, gitCommitTool, gitPushTool, gitLogTool, gitDiffTool } from "../tools/git";
+import { skillListTool, skillMatchTool, skillLoadTool, skillCreateTool } from "../tools/skills";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -146,6 +147,26 @@ For every task:
 - task-schedule: Create recurring or one-shot tasks (hourly/daily/weekly/once)
 - task-list: List all scheduled tasks with status
 - task-cancel: Cancel a scheduled task
+
+### 📚 SKILLS (specialized instructions)
+Skills are like specialized knowledge modules. When a task matches a skill domain, load and follow its instructions.
+
+- skill-list: See all available skills
+- skill-match: Find skills that match a user's request
+- skill-load: Load a skill's SKILL.md instructions — FOLLOW THEM for that task
+- skill-create: Create a new skill with custom instructions
+
+**SKILL WORKFLOW:**
+1. For specialized tasks (github, weather, API work, etc.), first check if a matching skill exists
+2. If found, use skill-load to get detailed instructions
+3. FOLLOW the skill's instructions step-by-step
+4. Skills contain domain-specific knowledge you don't have by default
+
+**Example:**
+- User: "Create a GitHub issue"
+- You: skill-match("github") → found "github" skill
+- You: skill-load("github") → detailed GitHub instructions
+- You: Follow those instructions to complete the task
 
 ### 🖥️ SYSTEM
 - system-info: OS/CPU/RAM
@@ -274,5 +295,7 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
     confidenceCheckTool,
     // Git (Point 48)
     gitStatusTool, gitCommitTool, gitPushTool, gitLogTool, gitDiffTool,
+    // Skills (OpenClaw-style dynamic instructions)
+    skillListTool, skillMatchTool, skillLoadTool, skillCreateTool,
   },
 });

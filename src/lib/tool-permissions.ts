@@ -460,6 +460,33 @@ export const TOOL_RISKS: Record<string, ToolRiskInfo> = {
     description: 'Handoff to another agent',
     requiresConfirmation: false,
   },
+  // ============================================
+  // SKILL TOOLS
+  // ============================================
+  'skill-list': {
+    risk: 'safe',
+    category: 'skills',
+    description: 'List all available skills',
+    requiresConfirmation: false,
+  },
+  'skill-match': {
+    risk: 'safe',
+    category: 'skills',
+    description: 'Find skills matching a query',
+    requiresConfirmation: false,
+  },
+  'skill-load': {
+    risk: 'safe',
+    category: 'skills',
+    description: 'Load skill instructions',
+    requiresConfirmation: false,
+  },
+  'skill-create': {
+    risk: 'moderate',
+    category: 'skills',
+    description: 'Create a new skill',
+    requiresConfirmation: false,
+  },
 };
 
 /**
