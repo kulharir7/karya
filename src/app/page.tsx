@@ -141,6 +141,7 @@ interface Message {
   content: string;
   timestamp: number;
   toolCalls?: { toolName: string; args?: any; result?: any; status: string }[];
+  images?: string[]; // Image data URLs for display
 }
 
 export default function Home() {
@@ -160,7 +161,9 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [activeAgent, setActiveAgent] = useState<{ agent: string; confidence: number; reason: string } | null>(null);
+  const [pendingImages, setPendingImages] = useState<Array<{ base64: string; mimeType: string; name: string; preview: string }>>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -271,30 +274,66 @@ export default function Home() {
     } catch {}
   }, [activeId, loadSessions, loadMessages]);
 
-  // File drop handler
+  // Image types for vision
+  const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+  // File drop handler — images go to pendingImages, others to text
   const handleFileDrop = async (files: FileList) => {
     for (const file of Array.from(files)) {
-      const form = new FormData();
-      form.append("file", file);
-      try {
-        const res = await fetch("/api/upload", { method: "POST", body: form });
-        const data = await res.json();
-        if (data.success) {
-          setInput((prev) => prev + (prev ? " " : "") + `[Uploaded: ${data.name} (${data.sizeFormatted}) → ${data.path}]`);
-        }
-      } catch {}
+      // Check if image
+      if (IMAGE_TYPES.includes(file.type)) {
+        // Read as base64 for vision
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(",")[1];
+          setPendingImages((prev) => [...prev, {
+            base64,
+            mimeType: file.type,
+            name: file.name,
+            preview: reader.result as string, // Full data URL for preview
+          }]);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // Non-image: upload and add path to input
+        const form = new FormData();
+        form.append("file", file);
+        try {
+          const res = await fetch("/api/upload", { method: "POST", body: form });
+          const data = await res.json();
+          if (data.success) {
+            setInput((prev) => prev + (prev ? " " : "") + `[Uploaded: ${data.name} (${data.sizeFormatted}) → ${data.path}]`);
+          }
+        } catch {}
+      }
     }
     setDragging(false);
   };
 
+  // Remove pending image
+  const removePendingImage = (index: number) => {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && pendingImages.length === 0) || isLoading) return;
 
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: input.trim(), timestamp: Date.now() };
+    // Include image previews in the displayed message
+    const hasImages = pendingImages.length > 0;
+    const userMsg: Message & { images?: string[] } = { 
+      id: Date.now().toString(), 
+      role: "user", 
+      content: input.trim() || (hasImages ? "[Image attached]" : ""), 
+      timestamp: Date.now(),
+      images: hasImages ? pendingImages.map(img => img.preview) : undefined,
+    };
     setMessages((prev) => [...prev, userMsg]);
-    const msg = input.trim();
-    setInput(""); setIsLoading(true); setStreamingText(""); setStreamingTools([]); setTaskCount((c) => c + 1);
+    
+    const msg = input.trim() || "What's in this image?"; // Default prompt for image-only
+    const imagesToSend = pendingImages.map(img => ({ base64: img.base64, mimeType: img.mimeType, name: img.name }));
+    
+    setInput(""); setPendingImages([]); setIsLoading(true); setStreamingText(""); setStreamingTools([]); setTaskCount((c) => c + 1);
 
     // Abort controller for cancel button (Point 56)
     const abortController = new AbortController();
@@ -303,7 +342,11 @@ export default function Home() {
     try {
       const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, sessionId: activeId }),
+        body: JSON.stringify({ 
+          message: msg, 
+          sessionId: activeId,
+          images: imagesToSend.length > 0 ? imagesToSend : undefined,
+        }),
         signal: abortController.signal,
       });
       if (!res.ok) throw new Error("Server error");
@@ -356,7 +399,7 @@ export default function Home() {
       setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: `❌ ${err.message}`, timestamp: Date.now() }]);
       setStreamingText(""); setStreamingTools([]); setActiveAgent(null);
     } finally { setIsLoading(false); }
-  }, [input, isLoading, activeId, loadSessions]);
+  }, [input, isLoading, activeId, loadSessions, pendingImages]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } };
 
@@ -619,6 +662,14 @@ export default function Home() {
                         <span className="text-[10px] text-[var(--text-muted)]">{new Date(msg.timestamp).toLocaleTimeString()}</span>
                       </div>
                       <div className="pl-8">
+                        {/* Attached images */}
+                        {msg.images && msg.images.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {msg.images.map((img, i) => (
+                              <img key={i} src={img} alt={`Attached ${i + 1}`} className="max-w-[200px] max-h-[150px] rounded-lg border border-gray-200 object-cover" />
+                            ))}
+                          </div>
+                        )}
                         <p className="text-[13.5px] text-[var(--text-primary)] leading-relaxed">{msg.content}</p>
                       </div>
                     </div>
@@ -708,17 +759,37 @@ export default function Home() {
         {/* Input */}
         <div className="border-t border-[var(--border)] bg-[var(--bg-secondary)] p-3 shrink-0">
           <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+            {/* Pending images preview */}
+            {pendingImages.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2 px-1">
+                {pendingImages.map((img, i) => (
+                  <div key={i} className="relative group">
+                    <img src={img.preview} alt={img.name} className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
+                    <button
+                      type="button"
+                      onClick={() => removePendingImage(i)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                    >
+                      ×
+                    </button>
+                    <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[8px] text-center py-0.5 rounded-b-lg truncate px-1">
+                      {img.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus-within:border-purple-400 focus-within:ring-2 focus-within:ring-purple-100 transition-all">
               <label className="cursor-pointer text-gray-400 hover:text-gray-600 transition-colors shrink-0 pb-0.5">
-                <input type="file" className="hidden" multiple onChange={(e) => e.target.files && handleFileDrop(e.target.files)} />
+                <input type="file" className="hidden" multiple accept="image/*,.pdf,.txt,.json,.csv,.md" onChange={(e) => e.target.files && handleFileDrop(e.target.files)} />
                 📎
               </label>
               <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-                placeholder="Message Karya... (Enter to send, Ctrl+K for commands)"
+                placeholder={pendingImages.length > 0 ? "Describe what you want to know about this image..." : "Message Karya... (Enter to send, Ctrl+K for commands)"}
                 rows={1} disabled={isLoading}
                 className="flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none resize-none disabled:opacity-50"
                 style={{ minHeight: "24px", maxHeight: "100px" }} />
-              <button type="submit" disabled={isLoading || !input.trim()}
+              <button type="submit" disabled={isLoading || (!input.trim() && pendingImages.length === 0)}
                 className="w-7 h-7 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center disabled:opacity-30 transition-all shrink-0 shadow-sm">
                 {isLoading ? <div className="w-3 h-3 rounded-full border-2 border-white/40 border-t-white animate-spin" /> :
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M14 2L7 9M14 2L9.5 14L7 9M14 2L2 6.5L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}

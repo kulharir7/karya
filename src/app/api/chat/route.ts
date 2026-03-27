@@ -95,9 +95,20 @@ function resolveToolName(raw: string): string {
   return TOOL_NAME_MAP[raw] || raw;
 }
 
+// Image attachment type for vision
+interface ImageAttachment {
+  base64: string;
+  mimeType: string;
+  name?: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { message, sessionId: reqSessionId } = await req.json();
+    const { message, sessionId: reqSessionId, images } = await req.json() as {
+      message: string;
+      sessionId?: string;
+      images?: ImageAttachment[]; // For vision support
+    };
 
     if (!message) {
       return new Response(JSON.stringify({ error: "Message is required" }), {
@@ -135,13 +146,39 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Add chat history
+    // Add chat history (excluding the current message which we'll add with images)
     contextMessages.push(
-      ...recentMessages.map((m) => ({
+      ...recentMessages.slice(0, -1).map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       }))
     );
+
+    // Add current user message (with images if present)
+    if (images && images.length > 0) {
+      // Multimodal message format for vision models
+      const contentParts: any[] = [
+        { type: "text", text: message }
+      ];
+      
+      for (const img of images) {
+        contentParts.push({
+          type: "image",
+          image: `data:${img.mimeType};base64,${img.base64}`,
+        });
+      }
+      
+      contextMessages.push({
+        role: "user",
+        content: contentParts,
+      });
+    } else {
+      // Text-only message
+      contextMessages.push({
+        role: "user",
+        content: message,
+      });
+    }
 
     // Auto-rename session from first user message
     if (session.messageCount <= 1) {
