@@ -12,6 +12,8 @@ import { executeCommandTool } from "../tools/shell";
 import {
   systemInfoTool, clipboardReadTool, clipboardWriteTool, notifyTool,
   dateTimeTool, processListTool, openAppTool, killProcessTool,
+  screenshotTool as systemScreenshotTool,
+  analyzeImageTool,
 } from "../tools/system";
 import { codeWriteTool, codeExecuteTool, codeAnalyzeTool } from "../tools/code";
 import { apiCallTool, csvParseTool, jsonQueryTool, dataTransformTool } from "../tools/data";
@@ -154,6 +156,27 @@ For every task:
 - clipboard-read / clipboard-write: Clipboard
 - system-notify: Desktop notification
 - shell-execute: Run any PowerShell command
+- **system-screenshot**: Capture user's screen and analyze it (VISION)
+
+### 📸 SCREEN CAPTURE (Vision)
+When user says ANY of these, use system-screenshot → then analyze-image:
+- "dekh kya ho raha hai" / "look at my screen"
+- "ye error dekh" / "check this error"  
+- "screen pe kya hai" / "what's on screen"
+- "is problem ko dekh" / "see this issue"
+- "meri screen dekh" / "look at this"
+- Any request that needs to SEE the user's current screen
+
+**TWO-STEP PROCESS (CRITICAL):**
+1. First call system-screenshot → Get base64 and imagePath
+2. IMMEDIATELY call analyze-image with that base64 → Get visual analysis
+3. Then respond to user's question based on the analysis
+
+Example:
+- User: "meri screen dekh"
+- You: system-screenshot() → {success: true, base64: "...", imagePath: "..."}
+- You: analyze-image({base64: "..."}) → {analysis: "I see VS Code with..."}
+- You: Reply describing what you saw and helping the user
 
 ## COMPLEX TASK HANDLING
 
@@ -233,6 +256,8 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
     // System
     systemInfoTool, clipboardReadTool, clipboardWriteTool, notifyTool,
     dateTimeTool, processListTool, openAppTool, killProcessTool,
+    systemScreenshotTool, // Screen capture for vision
+    analyzeImageTool, // Vision AI analysis for screenshots/images
     // Memory
     memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
     // Scheduler

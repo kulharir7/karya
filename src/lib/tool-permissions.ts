@@ -204,6 +204,18 @@ export const TOOL_RISKS: Record<string, ToolRiskInfo> = {
     description: 'Show notification',
     requiresConfirmation: false,
   },
+  'system-screenshot': {
+    risk: 'moderate',
+    category: 'system',
+    description: 'Capture screen for analysis',
+    requiresConfirmation: false,
+  },
+  'analyze-image': {
+    risk: 'safe',
+    category: 'system',
+    description: 'Analyze image using vision AI',
+    requiresConfirmation: false,
+  },
 
   // ============================================
   // CODE TOOLS

@@ -37,6 +37,8 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   "clipboard-read": { icon: "📋", label: "Read Clipboard", runText: "Reading clipboard..." },
   "clipboard-write": { icon: "📝", label: "Write Clipboard", runText: "Writing to clipboard..." },
   "system-notify": { icon: "🔔", label: "Notification", runText: "Sending notification..." },
+  "system-screenshot": { icon: "📸", label: "Screen Capture", runText: "Capturing screen..." },
+  "analyze-image": { icon: "👁️", label: "Analyze Image", runText: "Analyzing with vision AI..." },
   "code-write": { icon: "📝", label: "Write Code", runText: "Writing code..." },
   "code-execute": { icon: "▶️", label: "Execute Code", runText: "Running code..." },
   "code-analyze": { icon: "🔬", label: "Analyze Code", runText: "Analyzing code..." },
@@ -76,10 +78,36 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };
 
+// Tools that should completely hide their output (internal use only)
+const HIDE_OUTPUT_TOOLS = new Set([
+  "memory-search",        // internal search results
+  "memory-read",          // agent uses it, user doesn't need raw
+  "pass-context",         // internal agent data
+  "confidence-check",     // internal confidence score
+  "suggest-recovery",     // internal recovery suggestions
+  "log-recovery",         // internal logging
+]);
+
+// Tools that show minimal output (just success/fail + key info)
+const MINIMAL_OUTPUT_TOOLS: Record<string, (result: any) => string> = {
+  "system-screenshot": (r) => r?.success ? `📸 Screen captured (${r.width}×${r.height})` : "❌ Screenshot failed",
+  "browser-screenshot": (r) => r?.success ? `📸 Page captured` : "❌ Screenshot failed",
+  "file-write": (r) => r?.success ? `✅ File saved: ${r.path || r.filePath || 'file'}` : "❌ Write failed",
+  "code-write": (r) => r?.success ? `✅ Code saved: ${r.path || r.filePath || 'file'}` : "❌ Write failed",
+  "memory-write": (r) => r?.success ? `✅ Saved to memory` : "❌ Memory write failed",
+  "memory-log": (r) => r?.success ? `✅ Logged to daily memory` : "❌ Log failed",
+  "clipboard-write": (r) => r?.success ? `✅ Copied to clipboard` : "❌ Clipboard write failed",
+  "system-notify": (r) => r?.success ? `🔔 Notification sent` : "❌ Notification failed",
+  "git-commit": (r) => r?.success ? `✅ Committed: ${r.commitHash?.slice(0, 7) || 'done'}` : "❌ Commit failed",
+  "git-push": (r) => r?.success ? `✅ Pushed to remote` : "❌ Push failed",
+  "task-schedule": (r) => r?.success ? `⏰ Task scheduled: ${r.taskId || 'done'}` : "❌ Schedule failed",
+  "task-cancel": (r) => r?.success ? `✅ Task cancelled` : "❌ Cancel failed",
+};
+
 /**
  * Format tool output for display — clean key-value pairs
  */
-function formatOutput(result: any): { type: 'text' | 'table'; content: string | Array<{key: string; value: string}> } {
+function formatOutput(result: any): { type: 'text' | 'table' | 'minimal'; content: string | Array<{key: string; value: string}> } {
   // If it's already a string, try to parse as JSON
   if (typeof result === "string") {
     try {
@@ -150,7 +178,22 @@ export default function ToolCard({ toolName, status, args, result, showRisk = tr
   const isDangerous = requiresConfirmation(toolName);
   const isRunning = status === "running";
   const hasResult = result !== undefined && result !== null;
-  const output = hasResult ? formatOutput(result) : null;
+  
+  // Check if this tool should hide or minimize output
+  const shouldHideOutput = HIDE_OUTPUT_TOOLS.has(toolName);
+  const minimalFormatter = MINIMAL_OUTPUT_TOOLS[toolName];
+  
+  // Format output based on tool type
+  let output: { type: 'text' | 'table' | 'minimal'; content: string | Array<{key: string; value: string}> } | null = null;
+  if (hasResult) {
+    if (shouldHideOutput) {
+      output = null; // Completely hide
+    } else if (minimalFormatter) {
+      output = { type: 'minimal', content: minimalFormatter(result) };
+    } else {
+      output = formatOutput(result);
+    }
+  }
 
   return (
     <div className={`rounded-xl overflow-hidden my-2 border ${
@@ -222,7 +265,12 @@ export default function ToolCard({ toolName, status, args, result, showRisk = tr
       {/* Output — always visible when done */}
       {hasResult && output && (
         <div className="border-t border-gray-100 bg-gray-50/50">
-          {output.type === 'table' ? (
+          {output.type === 'minimal' ? (
+            // Minimal output — single line status
+            <div className="px-4 py-2.5">
+              <span className="text-sm text-gray-700">{output.content as string}</span>
+            </div>
+          ) : output.type === 'table' ? (
             <div className="px-4 py-3">
               <div className="space-y-1.5">
                 {(output.content as Array<{key: string; value: string}>).map(({ key, value }, i) => (

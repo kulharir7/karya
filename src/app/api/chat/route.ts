@@ -51,6 +51,8 @@ const TOOL_NAME_MAP: Record<string, string> = {
   executeCommandTool: "shell-execute", systemInfoTool: "system-info",
   clipboardReadTool: "clipboard-read", clipboardWriteTool: "clipboard-write",
   notifyTool: "system-notify", browserAgentTool: "browser-agent",
+  systemScreenshotTool: "system-screenshot",
+  analyzeImageTool: "analyze-image",
   batchRenameTool: "file-batch-rename", fileSizeTool: "file-size-info",
   dateTimeTool: "system-datetime", processListTool: "system-processes",
   openAppTool: "system-open-app", killProcessTool: "system-kill-process",
