@@ -25,6 +25,7 @@ import { backupWorkflow } from "./backup";
 import { multiSourceResearchWorkflow } from "./multi-source-research";
 import { fileCleanupWorkflow } from "./file-cleanup";
 import { batchImageProcessorWorkflow } from "./batch-image-processor";
+import { urlMonitorWorkflow } from "./url-monitor";
 
 // Export all workflows
 export {
@@ -36,6 +37,7 @@ export {
   multiSourceResearchWorkflow,
   fileCleanupWorkflow,
   batchImageProcessorWorkflow,
+  urlMonitorWorkflow,
 };
 
 // All workflows registry
@@ -48,6 +50,7 @@ export const workflows = {
   "multi-source-research": multiSourceResearchWorkflow,
   "file-cleanup": fileCleanupWorkflow,
   "batch-image-processor": batchImageProcessorWorkflow,
+  "url-monitor": urlMonitorWorkflow,
 };
 
 export type WorkflowId = keyof typeof workflows;
