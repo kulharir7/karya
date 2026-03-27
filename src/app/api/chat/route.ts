@@ -277,7 +277,8 @@ export async function POST(req: NextRequest) {
           // Persist assistant message
           await addMessage(sessionId, {
             role: "assistant",
-            content: fullText || "✅ Done.",
+            // If no text and no tools, likely an API error
+            content: fullText || (allToolCalls.length > 0 ? "✅ Done." : "⚠️ No response from AI. Check Settings → API keys."),
             toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
             timestamp: Date.now(),
           });
