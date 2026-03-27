@@ -15,6 +15,7 @@ import {
   dataProcessorWorkflow,
   backupWorkflow,
   multiSourceResearchWorkflow,
+  fileCleanupWorkflow,
 } from "./workflows";
 
 // MCP Server — exposes all tools to external clients
@@ -37,6 +38,7 @@ export const mastra = new Mastra({
     dataProcessorWorkflow,
     backupWorkflow,
     multiSourceResearchWorkflow,
+    fileCleanupWorkflow,
   },
   server: {
     port: parseInt(process.env.KARYA_MCP_PORT || "3001"),
