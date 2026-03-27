@@ -2,8 +2,22 @@ import { Stagehand } from "@browserbasehq/stagehand";
 
 let stagehandInstance: Stagehand | null = null;
 
+/**
+ * Get or create Stagehand browser instance
+ * Uses environment variables for configuration (no hardcoded API keys)
+ */
 export async function getStagehand(): Promise<Stagehand> {
   if (!stagehandInstance) {
+    // Get config from environment
+    const modelName = process.env.STAGEHAND_MODEL || process.env.LLM_MODEL || "gpt-4o";
+    const provider = process.env.STAGEHAND_PROVIDER || "openai";
+    const apiKey = process.env.STAGEHAND_API_KEY || process.env.OPENAI_API_KEY || process.env.LLM_API_KEY;
+    const baseURL = process.env.STAGEHAND_BASE_URL || process.env.LLM_BASE_URL;
+
+    if (!apiKey) {
+      console.warn("[stagehand] No API key found. Set STAGEHAND_API_KEY, OPENAI_API_KEY, or LLM_API_KEY");
+    }
+
     stagehandInstance = new Stagehand({
       env: "LOCAL",
       verbose: 1,
@@ -11,10 +25,10 @@ export async function getStagehand(): Promise<Stagehand> {
         headless: false,
       },
       model: {
-        modelName: "gpt-4o",
-        provider: "openai",
-        apiKey: process.env.LLM_API_KEY || "ollama",
-        baseURL: process.env.LLM_BASE_URL || "https://ollama.com/v1",
+        modelName,
+        provider,
+        apiKey: apiKey || "",
+        ...(baseURL && { baseURL }),
       },
     });
     await stagehandInstance.init();

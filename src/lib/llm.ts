@@ -94,36 +94,54 @@ const DEFAULT_CONFIG: LLMConfig = {
 };
 
 /**
- * Load config from file or environment
+ * Load config from environment variables (priority) or file
+ * SECURITY: Environment variables take precedence over config file
  */
 function loadConfig(): LLMConfig {
-  // Try to load from config file
-  if (fs.existsSync(CONFIG_PATH)) {
-    try {
-      const content = fs.readFileSync(CONFIG_PATH, "utf-8");
-      const saved = JSON.parse(content);
-      return { ...DEFAULT_CONFIG, ...saved };
-    } catch {
-      // Fall through to defaults
-    }
-  }
-
-  // Fall back to environment variables
-  return {
-    ...DEFAULT_CONFIG,
-    provider: (process.env.LLM_PROVIDER as LLMProvider) || DEFAULT_CONFIG.provider,
-    model: process.env.LLM_MODEL || DEFAULT_CONFIG.model,
+  // Environment variables have PRIORITY (for security)
+  const envConfig: Partial<LLMConfig> = {
+    provider: (process.env.LLM_PROVIDER as LLMProvider) || undefined,
+    model: process.env.LLM_MODEL || undefined,
     apiKeys: {
       anthropic: process.env.ANTHROPIC_API_KEY || "",
       openai: process.env.OPENAI_API_KEY || "",
       google: process.env.GOOGLE_API_KEY || "",
       openrouter: process.env.OPENROUTER_API_KEY || "",
     },
-    customProvider: {
-      name: "custom",
-      baseURL: process.env.LLM_BASE_URL || "",
+    customProvider: process.env.LLM_BASE_URL ? {
+      name: process.env.CUSTOM_PROVIDER_NAME || "custom",
+      baseURL: process.env.LLM_BASE_URL,
       apiKey: process.env.LLM_API_KEY || "",
+    } : undefined,
+  };
+
+  // Try to load from config file (for non-secret settings)
+  let fileConfig: Partial<LLMConfig> = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    try {
+      const content = fs.readFileSync(CONFIG_PATH, "utf-8");
+      fileConfig = JSON.parse(content);
+      // SECURITY: Remove API keys from file config if env vars exist
+      if (process.env.LLM_API_KEY && fileConfig.customProvider) {
+        fileConfig.customProvider.apiKey = "";
+      }
+    } catch {
+      // Fall through to defaults
+    }
+  }
+
+  // Merge: defaults <- file <- env (env wins)
+  return {
+    ...DEFAULT_CONFIG,
+    ...fileConfig,
+    ...(envConfig.provider && { provider: envConfig.provider }),
+    ...(envConfig.model && { model: envConfig.model }),
+    apiKeys: {
+      ...DEFAULT_CONFIG.apiKeys,
+      ...fileConfig.apiKeys,
+      ...envConfig.apiKeys,
     },
+    customProvider: envConfig.customProvider || fileConfig.customProvider || DEFAULT_CONFIG.customProvider,
   };
 }
 
