@@ -191,42 +191,52 @@ program
     const spinner = ora("Fetching tools...").start();
 
     try {
-      const data = await apiRequest("/api/mcp?action=tools");
+      // Fetch from help page data or hardcoded list
       spinner.stop();
-
       console.log(logo);
       
-      // Handle different API response formats
-      let tools: string[] = [];
-      if (data.tools && Array.isArray(data.tools)) {
-        tools = data.tools.map((t: any) => t.name || t.id || t);
-      } else if (data.toolsets) {
-        // Flatten toolsets
-        for (const ts of Object.values(data.toolsets) as any[]) {
-          if (ts.tools) {
-            tools.push(...Object.keys(ts.tools));
-          }
-        }
-      }
+      // Hardcoded tool list (matches actual tools in Karya)
+      const toolCategories: Record<string, string[]> = {
+        "BROWSER": [
+          "browser-navigate", "browser-act", "browser-extract", 
+          "browser-screenshot", "web-search", "browser-agent"
+        ],
+        "FILES": [
+          "file-read", "file-write", "file-list", "file-move", "file-search",
+          "file-read-pdf", "file-resize-image", "file-zip", "file-unzip", 
+          "file-batch-rename", "file-size-info"
+        ],
+        "SHELL": ["shell-execute"],
+        "SYSTEM": [
+          "system-info", "system-datetime", "system-processes", "system-open-app",
+          "system-kill-process", "clipboard-read", "clipboard-write", 
+          "system-notify", "system-screenshot", "analyze-image"
+        ],
+        "CODE": ["code-write", "code-execute", "code-analyze"],
+        "DATA": ["api-call", "data-csv-parse", "data-json-query", "data-transform"],
+        "MEMORY": [
+          "memory-search", "memory-read", "memory-write", 
+          "memory-log", "memory-list", "memory-recall"
+        ],
+        "GIT": ["git-status", "git-commit", "git-push", "git-log", "git-diff"],
+        "SCHEDULER": ["task-schedule", "task-list", "task-cancel"],
+        "SKILLS": ["skill-list", "skill-match", "skill-load", "skill-create"],
+        "WORKFLOWS": [
+          "workflow-list", "workflow-run", "workflow-status",
+          "workflow-history", "workflow-resume", "workflow-cancel", "workflow-stats"
+        ],
+        "AGENTS": [
+          "delegate-browser-agent", "delegate-file-agent", "delegate-coder-agent",
+          "delegate-researcher-agent", "delegate-data-analyst-agent"
+        ],
+      };
       
-      console.log(chalk.bold(`\n📦 ${tools.length} Tools Available\n`));
+      const totalTools = Object.values(toolCategories).flat().length;
+      console.log(chalk.bold(`\n📦 ${totalTools} Tools Available\n`));
 
-      if (tools.length === 0) {
-        console.log(chalk.gray("  No tools found. Make sure the server is running."));
-        return;
-      }
-
-      const categories: Record<string, string[]> = {};
-
-      for (const name of tools) {
-        const category = name.split("-")[0] || "other";
-        if (!categories[category]) categories[category] = [];
-        categories[category].push(name);
-      }
-
-      for (const [cat, toolList] of Object.entries(categories).sort()) {
-        console.log(chalk.yellow(`\n${cat.toUpperCase()}`));
-        for (const t of toolList.sort()) {
+      for (const [cat, toolList] of Object.entries(toolCategories)) {
+        console.log(chalk.yellow(`\n${cat} (${toolList.length})`));
+        for (const t of toolList) {
           console.log(chalk.gray(`  • ${t}`));
         }
       }
