@@ -25,6 +25,7 @@ import {
 } from "../tools/agents";
 import { createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusTool } from "../tools/planning";
 import { suggestRecoveryTool, logRecoveryTool } from "../tools/recovery";
+import { confidenceCheckTool } from "../tools/confidence";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -118,6 +119,9 @@ For every task:
 - get-plan-status: Check current plan progress.
 - review-output: Self-review your work quality after completing a complex task. Be honest!
 
+### 🎯 CONFIDENCE (self-awareness)
+- confidence-check: Rate your confidence in understanding the request. Use when ambiguous. Low confidence = ask user.
+
 ### 🔄 ERROR RECOVERY (never give up)
 - suggest-recovery: When ANY tool fails, call this IMMEDIATELY. It suggests alternative approaches.
 - log-recovery: Record successful recoveries for future learning.
@@ -203,5 +207,7 @@ Example: "Download all images from this website and resize them"
     createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusTool,
     // Error Recovery (Point 7)
     suggestRecoveryTool, logRecoveryTool,
+    // Confidence (Point 10)
+    confidenceCheckTool,
   },
 });

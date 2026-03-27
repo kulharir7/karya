@@ -79,6 +79,7 @@ const TOOL_NAME_MAP: Record<string, string> = {
   // Error Recovery
   suggestRecoveryTool: "suggest-recovery",
   logRecoveryTool: "log-recovery",
+  confidenceCheckTool: "confidence-check",
 };
 
 function resolveToolName(raw: string): string {
@@ -162,50 +163,55 @@ export async function POST(req: NextRequest) {
             streamOptions.toolsets = mcpToolsets;
           }
 
-          // === TRUE WORD-BY-WORD STREAMING ===
-          // textStream gives real token-by-token streaming
-          // steps gives tool calls after each agent step
+          // === DUAL STREAM: Real-time tools + word-by-word text (Point 52) ===
+          // Use fullStream for interleaved tool + text events
+          // This shows tool cards DURING execution, not after
           const streamResult = await agent.stream(contextMessages, streamOptions);
 
           let fullText = "";
           const allToolCalls: { toolName: string; args?: any; result?: any; status: string }[] = [];
+          const pendingTools: Map<string, { toolName: string; args?: any }> = new Map();
 
-          // Stream text word-by-word using textStream (proven to give individual tokens)
-          const textStream = (streamResult as any).textStream;
-          for await (const chunk of textStream) {
-            if (chunk) {
-              fullText += chunk;
-              send({ type: "text-delta", content: chunk });
-            }
-          }
+          const fullStream = (streamResult as any).fullStream;
+          for await (const event of fullStream) {
+            // Events can be wrapped in payload (Mastra) or direct
+            const ev = event?.payload || event;
+            const type = ev?.type || event?.type;
 
-          // After text stream ends, extract tool calls from steps
-          const steps = await (streamResult as any).steps;
-          if (steps && Array.isArray(steps)) {
-            for (const step of steps) {
-              const toolCalls = step?.toolCalls || [];
-              const toolResults = step?.toolResults || [];
-
-              for (let i = 0; i < toolCalls.length; i++) {
-                const tc = toolCalls[i];
-                const tr = toolResults[i];
-                const p = tc?.payload || tc || {};
-                const rp = tr?.payload || tr || {};
-
-                const rawName = p.toolName || (p as any).name || "unknown";
-                const toolName = resolveToolName(rawName);
-
-                await eventBus.emit("tool:before_call", { toolName, args: p.args || {} });
-                send({ type: "tool-call", toolName, args: p.args || {} });
-
-                if (tr) {
-                  const result = rp.result || null;
-                  send({ type: "tool-result", toolName, result });
-                  await eventBus.emit("tool:after_call", { toolName, result });
-                  allToolCalls.push({ toolName, args: p.args || {}, result, status: "done" });
-                }
+            if (type === "text-delta") {
+              const delta = ev?.textDelta || ev?.content || "";
+              if (delta) {
+                fullText += delta;
+                send({ type: "text-delta", content: delta });
               }
+            } else if (type === "tool-call") {
+              const rawName = ev?.toolName || ev?.name || "unknown";
+              const toolName = resolveToolName(rawName);
+              const args = ev?.args || {};
+              const callId = ev?.toolCallId || rawName;
+
+              pendingTools.set(callId, { toolName, args });
+              await eventBus.emit("tool:before_call", { toolName, args });
+              send({ type: "tool-call", toolName, args });
+            } else if (type === "tool-result") {
+              const rawName = ev?.toolName || ev?.name || "unknown";
+              const toolName = resolveToolName(rawName);
+              const callId = ev?.toolCallId || rawName;
+              const result = ev?.result || null;
+
+              send({ type: "tool-result", toolName, result });
+              await eventBus.emit("tool:after_call", { toolName, result });
+
+              const pending = pendingTools.get(callId);
+              allToolCalls.push({
+                toolName,
+                args: pending?.args || {},
+                result,
+                status: "done",
+              });
+              pendingTools.delete(callId);
             }
+            // Skip other event types (step-start, step-finish, etc.)
           }
 
           // Persist assistant message

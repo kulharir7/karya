@@ -53,6 +53,9 @@ import { createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusToo
 // Error Recovery tools (Point 7)
 import { suggestRecoveryTool, logRecoveryTool } from "../tools/recovery";
 
+// Confidence tools (Point 10)
+import { confidenceCheckTool } from "../tools/confidence";
+
 /**
  * Karya MCP Server — exposes ALL 32 tools to external MCP clients.
  * 
@@ -145,6 +148,9 @@ export function createKaryaMCPServer() {
       // === Error Recovery (2) ===
       suggestRecoveryTool,
       logRecoveryTool,
+
+      // === Confidence (1) ===
+      confidenceCheckTool,
     },
   });
 }

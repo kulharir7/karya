@@ -67,6 +67,8 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   // Recovery
   "suggest-recovery": { icon: "🔄", label: "Find Alternative", runText: "Finding alternative approach..." },
   "log-recovery": { icon: "✅", label: "Recovery Logged", runText: "Logging recovery..." },
+  // Confidence
+  "confidence-check": { icon: "🎯", label: "Confidence Check", runText: "Assessing confidence..." },
 };
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };
