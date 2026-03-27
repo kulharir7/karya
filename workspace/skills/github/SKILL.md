@@ -1,68 +1,71 @@
 ---
 name: GitHub
 description: GitHub operations - repos, issues, PRs, commits
-triggers: github, repo, repository, pull request, PR, issue, commit, clone, fork
+triggers: github, repo, repository, pull request, PR, issue, commit, clone, push, git
 ---
 
 # GitHub Skill
 
-This skill helps you work with GitHub repositories using the GitHub CLI (`gh`).
+Manage GitHub repositories, issues, and pull requests.
 
 ## Prerequisites
-- GitHub CLI must be installed: `winget install GitHub.cli`
-- Must be authenticated: `gh auth login`
+- Git CLI installed
+- GitHub CLI (`gh`) recommended but optional
 
 ## Common Operations
 
-### List Repositories
+### Check Repository Status
 ```bash
-gh repo list [owner] --limit 10
+git status
+git log --oneline -10
 ```
 
-### Clone Repository
+### Clone a Repository
 ```bash
-gh repo clone owner/repo
+git clone https://github.com/<owner>/<repo>.git
+# or with gh
+gh repo clone <owner>/<repo>
 ```
 
-### Create Issue
+### Create Issue (gh CLI)
 ```bash
-gh issue create --title "Title" --body "Description"
+gh issue create --title "Bug: XYZ" --body "Description here"
+```
+
+### Create PR (gh CLI)
+```bash
+gh pr create --title "Feature: ABC" --body "Changes made"
 ```
 
 ### List Issues
 ```bash
-gh issue list --state open --limit 10
+gh issue list
 ```
 
-### Create Pull Request
+### View Issue
 ```bash
-gh pr create --title "Title" --body "Description" --base main
+gh issue view <number>
 ```
 
-### List Pull Requests
-```bash
-gh pr list --state open
-```
+## Without gh CLI
 
-### View PR/Issue
-```bash
-gh pr view [number]
-gh issue view [number]
+Use api-call tool:
 ```
-
-### Merge PR
-```bash
-gh pr merge [number] --squash --delete-branch
+api-call({
+  method: "GET",
+  url: "https://api.github.com/repos/<owner>/<repo>/issues",
+  headers: { "Authorization": "token <GITHUB_TOKEN>" }
+})
 ```
 
 ## Workflow
 
-1. **For repo operations**: Use `shell-execute` with `gh` commands
-2. **For viewing**: Parse the output and present nicely to user
-3. **For creating**: Confirm with user before executing write operations
-4. **Always**: Check if `gh` is authenticated first with `gh auth status`
+1. Check if `gh` is available: `shell-execute("gh --version")`
+2. If yes: use `gh` commands
+3. If no: use `git` for local ops, `api-call` for GitHub API
+4. Always confirm before push/PR operations
 
 ## Error Handling
-- If `gh` not found: Tell user to install it
-- If not authenticated: Guide them through `gh auth login`
-- If repo not found: Check spelling, suggest alternatives
+- Auth failed: Ask user to run `gh auth login`
+- Repo not found: Verify URL is correct
+- Permission denied: Check if user has write access

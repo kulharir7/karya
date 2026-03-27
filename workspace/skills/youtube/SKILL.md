@@ -1,67 +1,69 @@
 ---
 name: YouTube
-description: YouTube video operations - download, info, search
-triggers: youtube, yt, video download, video info, yt-dlp, youtube-dl
+description: YouTube video operations - search, transcript, download info
+triggers: youtube, video, yt, transcript, subtitles, watch
 ---
 
 # YouTube Skill
 
-Work with YouTube videos using yt-dlp.
+Search YouTube videos, get transcripts, and video information.
 
-## Prerequisites
-- yt-dlp must be installed: `winget install yt-dlp`
-- ffmpeg for audio extraction: `winget install ffmpeg`
+## Search Videos
 
-## Common Operations
-
-### Get Video Info
-```bash
-yt-dlp --dump-json "URL" | jq '{title, duration, view_count, upload_date}'
+Use web-search or browser:
+```
+web-search("site:youtube.com <query>")
 ```
 
-### Download Video (Best Quality)
-```bash
-yt-dlp -f "best" -o "%(title)s.%(ext)s" "URL"
+Or use YouTube Data API (requires key):
+```
+api-call({
+  url: "https://www.googleapis.com/youtube/v3/search?part=snippet&q=<query>&key=<API_KEY>"
+})
 ```
 
-### Download Audio Only (MP3)
-```bash
-yt-dlp -x --audio-format mp3 -o "%(title)s.%(ext)s" "URL"
+## Get Video Info
+
+Extract video ID from URL:
+- youtube.com/watch?v=VIDEO_ID
+- youtu.be/VIDEO_ID
+
+Use noembed for basic info (no API key):
+```
+api-call({
+  url: "https://noembed.com/embed?url=https://youtube.com/watch?v=<VIDEO_ID>"
+})
 ```
 
-### Download with Subtitles
+## Get Transcript/Subtitles
+
+Option 1: Use yt-dlp (if installed)
 ```bash
-yt-dlp --write-subs --sub-lang en -o "%(title)s.%(ext)s" "URL"
+yt-dlp --write-auto-sub --skip-download --sub-lang en "https://youtube.com/watch?v=<VIDEO_ID>"
 ```
 
-### List Available Formats
-```bash
-yt-dlp -F "URL"
+Option 2: Use browser-agent to extract from page
+```
+browser-agent("go to youtube video <URL>, click CC button, copy transcript")
 ```
 
-### Download Specific Format
+## Download (Info Only)
+
+Get downloadable formats (yt-dlp):
 ```bash
-yt-dlp -f 137+140 -o "%(title)s.%(ext)s" "URL"
+yt-dlp -F "https://youtube.com/watch?v=<VIDEO_ID>"
 ```
 
-### Download Playlist
-```bash
-yt-dlp -o "%(playlist)s/%(title)s.%(ext)s" "PLAYLIST_URL"
-```
+**Note**: Actual downloading may violate ToS. Provide info only.
 
 ## Workflow
 
-1. **Extract URL** from user's message
-2. **Confirm download location** (default: workspace/downloads/)
-3. **Get video info** first to show title/duration
-4. **Download** using appropriate format
-5. **Report** file location and size when done
-
-## Output Location
-Save downloads to: `workspace/downloads/`
+1. Parse video URL to extract VIDEO_ID
+2. For info: use noembed API
+3. For transcript: check if yt-dlp available, else use browser
+4. For search: use web-search with site:youtube.com
 
 ## Error Handling
-- If yt-dlp not found: Guide installation
-- If video unavailable: Check if private/age-restricted
-- If format not available: List available formats, let user choose
-- If download fails: Try with `--force-overwrites` or different format
+- Video unavailable: Check if video is public/exists
+- Transcript not available: Video may not have captions
+- Age restricted: May need authenticated browser session
