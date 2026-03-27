@@ -1,54 +1,499 @@
 @import "tailwindcss";
 
+/* ============================================
+   KARYA UI — Professional Color Scheme
+   ============================================ */
+
 :root {
-  --bg-primary: #f8f9fa;
+  /* Light Mode */
+  --bg-primary: #fafafa;
   --bg-secondary: #ffffff;
-  --bg-hover: #f0f0f0;
-  --text-primary: #1a1a1a;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
+  --bg-tertiary: #f4f4f5;
+  --bg-hover: #f4f4f5;
+  --bg-active: #ede9fe;
+  
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
+  
   --accent: #7c3aed;
-  --border: #e5e7eb;
+  --accent-light: #ede9fe;
+  --accent-hover: #6d28d9;
+  
+  --success: #22c55e;
+  --success-light: #dcfce7;
+  --warning: #f59e0b;
+  --warning-light: #fef3c7;
+  --error: #ef4444;
+  --error-light: #fee2e2;
+  --info: #3b82f6;
+  --info-light: #dbeafe;
+  
+  --border: #e4e4e7;
+  --border-hover: #d4d4d8;
+  
+  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+  
+  /* Sidebar specific */
+  --sidebar-bg: #fafafa;
+  --sidebar-border: #e4e4e7;
+  --sidebar-text: #52525b;
+  --sidebar-text-muted: #a1a1aa;
+  --sidebar-hover: #f4f4f5;
+  --sidebar-active: #ede9fe;
 }
 
 .dark {
-  --bg-primary: #0f0f17;
-  --bg-secondary: #16161f;
-  --bg-hover: #1e1e2a;
-  --text-primary: #e4e4e7;
+  /* Dark Mode */
+  --bg-primary: #09090b;
+  --bg-secondary: #18181b;
+  --bg-tertiary: #27272a;
+  --bg-hover: #27272a;
+  --bg-active: #3f3f46;
+  
+  --text-primary: #fafafa;
   --text-secondary: #a1a1aa;
   --text-muted: #71717a;
-  --accent: #8b5cf6;
+  
+  --accent: #a78bfa;
+  --accent-light: #2e1065;
+  --accent-hover: #8b5cf6;
+  
+  --success: #4ade80;
+  --success-light: #14532d;
+  --warning: #fbbf24;
+  --warning-light: #713f12;
+  --error: #f87171;
+  --error-light: #7f1d1d;
+  --info: #60a5fa;
+  --info-light: #1e3a5f;
+  
   --border: #27272a;
+  --border-hover: #3f3f46;
+  
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.4);
+  
+  /* Sidebar specific */
+  --sidebar-bg: #0f0f12;
+  --sidebar-border: #1f1f24;
+  --sidebar-text: #a1a1aa;
+  --sidebar-text-muted: #71717a;
+  --sidebar-hover: #1a1a1f;
+  --sidebar-active: #27272a;
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
+  margin: 0;
+  padding: 0;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
-.dark ::-webkit-scrollbar-thumb { background: #3f3f46; }
+/* ============================================
+   SCROLLBARS
+   ============================================ */
 
-@keyframes thinking {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-.animate-thinking span:nth-child(1) { animation: thinking 1.4s infinite 0s; }
-.animate-thinking span:nth-child(2) { animation: thinking 1.4s infinite 0.2s; }
-.animate-thinking span:nth-child(3) { animation: thinking 1.4s infinite 0.4s; }
 
-/* Sidebar custom scrollbar — thin, dark */
-.sidebar-scroll::-webkit-scrollbar { width: 3px; }
-.sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-.sidebar-scroll::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 10px; }
-.sidebar-scroll::-webkit-scrollbar-thumb:hover { background: #3a3a4a; }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-/* Sidebar active item glow */
-.sidebar-active-glow {
-  box-shadow: inset 2px 0 0 #7c3aed, 0 0 8px rgba(124, 58, 237, 0.1);
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+/* Thin scrollbar for sidebar */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--sidebar-border);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.animate-spin-slow {
+  animation: spin 2s linear infinite;
+}
+
+/* Thinking animation */
+.thinking-dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 2px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(1) { animation-delay: 0s; }
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ============================================
+   UTILITIES
+   ============================================ */
+
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.dark .glass {
+  background: rgba(24, 24, 27, 0.8);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent) 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-bg {
+  background: linear-gradient(135deg, var(--accent) 0%, #6366f1 100%);
+}
+
+/* Focus ring */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent);
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ============================================
+   TOOL CARD STYLES
+   ============================================ */
+
+.tool-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.tool-card.running {
+  border-color: var(--info);
+  background: var(--info-light);
+}
+
+.tool-card.done {
+  border-color: var(--success);
+}
+
+.tool-card.error {
+  border-color: var(--error);
+  background: var(--error-light);
+}
+
+.tool-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.tool-card-body {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ============================================
+   MESSAGE STYLES
+   ============================================ */
+
+.message {
+  animation: slide-up 0.3s ease-out;
+}
+
+.message-user {
+  background: transparent;
+}
+
+.message-assistant {
+  background: transparent;
+}
+
+.message-assistant:hover {
+  background: var(--bg-hover);
+  border-radius: 12px;
+}
+
+.message-actions {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+/* ============================================
+   INPUT STYLES
+   ============================================ */
+
+.chat-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.chat-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+/* ============================================
+   SIDEBAR STYLES
+   ============================================ */
+
+.sidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin: 2px 8px;
+  border-radius: 8px;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-item:hover {
+  background: var(--sidebar-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-item.active {
+  background: var(--sidebar-active);
+  color: var(--text-primary);
+}
+
+.sidebar-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--sidebar-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 16px 6px;
+}
+
+/* ============================================
+   BUTTON STYLES
+   ============================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ============================================
+   BADGE STYLES
+   ============================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 9999px;
+}
+
+.badge-purple {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.badge-green {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.badge-amber {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+
+.badge-red {
+  background: var(--error-light);
+  color: var(--error);
+}
+
+.badge-blue {
+  background: var(--info-light);
+  color: var(--info);
+}
+
+/* ============================================
+   CODE STYLES
+   ============================================ */
+
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+pre {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+  }
 }

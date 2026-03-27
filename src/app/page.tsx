@@ -35,22 +35,18 @@ function SidebarSection({ title, children, defaultOpen = true, action }: {
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="mt-2 first:mt-0">
-      <div className="flex items-center justify-between px-4 py-2">
-        <div onClick={() => setOpen(!open)} className="flex items-center gap-0 cursor-pointer flex-1 select-none">
-          <span className="text-[11px] font-semibold text-[#5a5a72] uppercase tracking-[0.1em]">{title}</span>
+    <div className="mt-3 first:mt-2">
+      <div className="flex items-center justify-between px-4 py-1.5">
+        <div onClick={() => setOpen(!open)} className="flex items-center gap-1 cursor-pointer flex-1 select-none">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+            className={`transition-transform duration-200 text-[var(--text-muted)] ${open ? "rotate-90" : ""}`}>
+            <path d="M9 6l6 6-6 6"/>
+          </svg>
+          <span className="sidebar-section-title !p-0">{title}</span>
         </div>
-        <div className="flex items-center gap-1">
-          {action}
-          <div onClick={() => setOpen(!open)} className="cursor-pointer text-[#3a3a4a] hover:text-[#6a6a7a] transition-colors">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-              className={`transition-transform duration-200 ${open ? "" : "-rotate-90"}`}>
-              <path d="M6 9l6 6 6-6"/>
-            </svg>
-          </div>
-        </div>
+        {action && <div className="flex items-center">{action}</div>}
       </div>
-      {open && <div className="space-y-[1px]">{children}</div>}
+      {open && <div className="space-y-0.5 mt-1">{children}</div>}
     </div>
   );
 }
@@ -61,21 +57,17 @@ function SidebarNavItem({ icon, label, active, onClick, onDelete, badge }: {
   return (
     <div
       onClick={onClick}
-      className={`group flex items-center gap-3 mx-2 px-3 py-[7px] rounded-lg cursor-pointer transition-all duration-150 ${
-        active
-          ? "bg-[#1e1e2e] text-white"
-          : "text-[#8e8ea0] hover:text-[#c4c4d4] hover:bg-[#141420]"
-      }`}
+      className={`sidebar-item ${active ? "active" : ""}`}
     >
-      <span className={`shrink-0 ${active ? "text-white" : "text-[#5a5a72] group-hover:text-[#8e8ea0]"}`}>{icon}</span>
+      <span className="shrink-0 text-[var(--sidebar-text-muted)]">{icon}</span>
       <span className="flex-1 text-[13px] truncate">{label}</span>
       {badge && (
-        <kbd className="text-[10px] text-[#4a4a5a] bg-[#0f0f14] px-1.5 py-0.5 rounded font-mono border border-[#1e1e2a]">{badge}</kbd>
+        <kbd className="text-[9px] text-[var(--text-muted)] bg-[var(--bg-tertiary)] px-1.5 py-0.5 rounded font-mono border border-[var(--border)]">{badge}</kbd>
       )}
       {onDelete && (
         <span
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="opacity-0 group-hover:opacity-100 text-[#4a4a5a] hover:text-red-400 text-[10px] transition-opacity"
+          className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-[var(--error)] text-xs transition-opacity"
         >✕</span>
       )}
     </div>
@@ -84,14 +76,8 @@ function SidebarNavItem({ icon, label, active, onClick, onDelete, badge }: {
 
 function SidebarNavLink({ icon, label, href, active }: { icon: React.ReactNode; label: string; href: string; active?: boolean }) {
   return (
-    <Link href={href}
-      className={`group flex items-center gap-3 mx-2 px-3 py-[7px] rounded-lg transition-all duration-150 ${
-        active
-          ? "bg-[#1e1e2e] text-white"
-          : "text-[#8e8ea0] hover:text-[#c4c4d4] hover:bg-[#141420]"
-      }`}
-    >
-      <span className={`shrink-0 ${active ? "text-white" : "text-[#5a5a72] group-hover:text-[#8e8ea0]"}`}>{icon}</span>
+    <Link href={href} className={`sidebar-item ${active ? "active" : ""}`}>
+      <span className="shrink-0 text-[var(--sidebar-text-muted)]">{icon}</span>
       <span className="flex-1 text-[13px] truncate">{label}</span>
     </Link>
   );
@@ -479,18 +465,22 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/20 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar — OpenClaw-style with collapsible sections */}
-      <div className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 fixed md:static z-40 w-[220px] bg-[#0f0f14] border-r border-[#1e1e2a] flex flex-col shrink-0 h-full transition-transform duration-200`}>
+      {/* Sidebar */}
+      <div className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 fixed md:static z-40 w-[240px] sidebar flex flex-col shrink-0 h-full transition-transform duration-200`}>
         {/* Logo */}
-        <div className="px-4 py-3.5 border-b border-[#1e1e2a]">
+        <div className="px-4 py-3.5 border-b border-[var(--sidebar-border)]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-purple-500/20">⚡</div>
             <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-bold text-white tracking-tight">Karya</div>
-              <div className="text-[9px] text-[#5a5a72] font-medium">AI Computer Agent</div>
+              <div className="text-[13px] font-bold text-[var(--text-primary)] tracking-tight">Karya</div>
+              <div className="text-[9px] text-[var(--text-muted)] font-medium">AI Computer Agent</div>
             </div>
-            <button onClick={toggleDark} className="text-[#5a5a72] hover:text-white transition-colors text-xs">
-              {dark ? "☀️" : "🌙"}
+            <button 
+              onClick={toggleDark} 
+              className="w-8 h-8 rounded-lg bg-[var(--bg-hover)] hover:bg-[var(--accent-light)] flex items-center justify-center transition-all"
+              title={dark ? "Light mode" : "Dark mode"}
+            >
+              <span className="text-base">{dark ? "☀️" : "🌙"}</span>
             </button>
           </div>
         </div>
@@ -505,17 +495,35 @@ export default function Home() {
             <SidebarNavLink icon={icons.settings} label="Settings" href="/settings" />
           </SidebarSection>
 
+          {/* ─── PAGES ─── */}
+          <SidebarSection title="PAGES" defaultOpen={true}>
+            <SidebarNavLink icon={icons.automation} label="Workflows" href="/workflows" />
+            <SidebarNavLink icon={icons.logs} label="Audit Log" href="/audit" />
+          </SidebarSection>
+
+          {/* ─── CHATS ─── */}
+          <SidebarSection title="CHATS" defaultOpen={true} action={
+            <button onClick={newSession} className="text-[#5a5a72] hover:text-white transition-colors">
+              {icons.plus}
+            </button>
+          }>
+            {sessions.slice(0, 10).map((s) => (
+              <SidebarNavItem
+                key={s.id}
+                icon={icons.chat}
+                label={s.name}
+                active={s.id === activeId}
+                onClick={() => switchSession(s.id)}
+                onDelete={s.id !== "default" ? () => delSession(s.id) : undefined}
+              />
+            ))}
+            {sessions.length === 0 && (
+              <div className="px-4 py-2 text-[11px] text-[#5a5a72]">No chats yet</div>
+            )}
+          </SidebarSection>
+
           {/* ─── DEV / DEBUG ─── */}
           <SidebarSection title="DEBUG" defaultOpen={false}>
-            <SidebarNavLink icon={icons.events} label="Events API" href="/api/events" />
-            <SidebarNavLink icon={icons.memory} label="Memory API" href="/api/memory?action=list" />
-            <SidebarNavLink icon={icons.logs} label="Sessions API" href="/api/sessions" />
-            <SidebarNavLink icon={icons.mcp} label="MCP API" href="/api/mcp?action=list" />
-            <SidebarNavItem icon={icons.export} label="Export Chat" onClick={() => {
-              const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}]\n${m.content}`).join("\n\n---\n\n");
-              const blob = new Blob([text], { type: "text/plain" });
-              const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `karya-chat-${new Date().toISOString().slice(0,10)}.txt`; a.click();
-            }} />
             <SidebarNavItem icon={icons.export} label="Export Chat" onClick={() => {
               const text = messages.map((m) => `[${m.role === "user" ? "You" : "Karya"}]\n${m.content}`).join("\n\n---\n\n");
               const blob = new Blob([text], { type: "text/plain" });
@@ -525,17 +533,19 @@ export default function Home() {
         </div>
 
         {/* Bottom status bar */}
-        <div className="px-3 py-3 border-t border-[#1e1e2a]">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-sm">
-              <span className="text-[9px] text-white font-bold">K</span>
+        <div className="px-3 py-3 border-t border-[var(--sidebar-border)]">
+          <div className="flex items-center gap-2.5">
+            <div className="relative">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-sm">
+                <span className="text-xs text-white font-bold">K</span>
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-[var(--sidebar-bg)]" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] font-medium text-[#c4c4d4] truncate">Karya v1.0</div>
-              <div className="flex items-center gap-1.5 text-[10px] text-[#5a5a72]">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-sm shadow-green-500/50" />
+              <div className="text-xs font-medium text-[var(--text-primary)] truncate">Karya v1.0</div>
+              <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
                 <span className="truncate">gpt-oss:120b</span>
-                <span className="text-[#2a2a3a]">•</span>
+                <span>•</span>
                 <span>{taskCount} tasks</span>
               </div>
             </div>
