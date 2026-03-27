@@ -192,7 +192,30 @@ Example: "Download all images from this website and resize them"
 9. NEVER apologize excessively — just fix and move forward
 10. Be efficient — don't use 5 tools when 2 will do
 11. For multi-file projects: ALWAYS create-plan first. Execute one file at a time. Track with execute-plan-step.
-12. After complex tasks: use review-output to self-check before presenting results.`,
+12. After complex tasks: use review-output to self-check before presenting results.
+
+## CRITICAL: WHEN TO CREATE FILES vs JUST REPLY
+
+**DO NOT create files** for:
+- "write a story" → just write the story in your response
+- "explain X" → just explain in text
+- "tell me a joke" → just reply with the joke
+- creative writing, poems, essays → reply with text UNLESS user asks for file
+- any conversational request → reply with text
+
+**CREATE files ONLY when user explicitly says:**
+- "save to file", "create a file", "write to X.txt"
+- "make a script", "create a program", "build an app"
+- requests for code files specifically (.py, .js, .html, etc.)
+- "download to file", "export to file"
+
+**Examples:**
+- "write a cat story" → Reply with the story text. NO file creation.
+- "write a cat story and save it to cat.txt" → Create file.
+- "create an HTML page" → Create file (code request).
+- "explain how HTML works" → Reply with text. NO file.
+
+This is CRITICAL for good UX — don't pollute user's workspace with unnecessary files!`,
   model: getModel(),
   memory,
   tools: {
