@@ -51,6 +51,7 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   "memory-write": { icon: "✏️", label: "Write Memory", runText: "Saving to memory..." },
   "memory-log": { icon: "📝", label: "Log Activity", runText: "Logging activity..." },
   "memory-list": { icon: "📋", label: "List Memory", runText: "Listing memory files..." },
+  "memory-recall": { icon: "🔮", label: "Semantic Recall", runText: "Searching with AI..." },
   "task-schedule": { icon: "⏰", label: "Schedule Task", runText: "Scheduling task..." },
   "task-list": { icon: "📋", label: "List Tasks", runText: "Listing tasks..." },
   "task-cancel": { icon: "❌", label: "Cancel Task", runText: "Cancelling task..." },

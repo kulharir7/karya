@@ -306,6 +306,12 @@ export const TOOL_RISKS: Record<string, ToolRiskInfo> = {
     description: 'List memory files',
     requiresConfirmation: false,
   },
+  'memory-recall': {
+    risk: 'safe',
+    category: 'memory',
+    description: 'Semantic search (RAG) through conversations',
+    requiresConfirmation: false,
+  },
 
   // ============================================
   // GIT TOOLS

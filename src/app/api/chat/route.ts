@@ -65,6 +65,7 @@ const TOOL_NAME_MAP: Record<string, string> = {
   memoryWriteTool: "memory-write",
   memoryLogTool: "memory-log",
   memoryListTool: "memory-list",
+  memoryRecallTool: "memory-recall",
   scheduleTaskTool: "task-schedule",
   listTasksTool: "task-list",
   cancelTaskTool: "task-cancel",

@@ -9,6 +9,7 @@ import {
   listMemoryFiles,
   readLongTermMemory,
 } from "@/lib/memory-engine";
+import { semanticSearch } from "@/lib/memory";
 
 /**
  * Memory Search — semantic search across workspace memory files.
@@ -139,5 +140,57 @@ export const memoryListTool = createTool({
   execute: async () => {
     const files = listMemoryFiles();
     return { success: true, files, count: files.length };
+  },
+});
+
+/**
+ * Semantic Memory Recall — RAG-based search across conversation history.
+ * Uses vector embeddings to find semantically similar past messages.
+ */
+export const memoryRecallTool = createTool({
+  id: "memory-recall",
+  description:
+    "Semantic search through past conversations using AI embeddings. " +
+    "Use when you need to recall what the user said about a topic, or find related discussions. " +
+    "This is MORE POWERFUL than memory-search — it understands MEANING, not just keywords.",
+  inputSchema: z.object({
+    query: z.string().describe("What to search for — can be natural language, questions, or topics"),
+    threadId: z.string().optional().describe("Session/thread ID to search in. Leave empty for current session."),
+    topK: z.number().optional().describe("Number of results to return (default 5)"),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    messages: z.array(z.object({
+      role: z.string(),
+      content: z.string(),
+      createdAt: z.string().optional(),
+    })),
+    count: z.number(),
+    query: z.string(),
+  }),
+  execute: async ({ query, threadId, topK }) => {
+    try {
+      // Use default thread if not specified
+      const thread = threadId || "default";
+      const messages = await semanticSearch(thread, query, topK || 5);
+      
+      return {
+        success: true,
+        messages: messages.map((m: any) => ({
+          role: m.role || "unknown",
+          content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+          createdAt: m.createdAt?.toISOString?.() || undefined,
+        })),
+        count: messages.length,
+        query,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        messages: [],
+        count: 0,
+        query,
+      };
+    }
   },
 });

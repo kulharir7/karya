@@ -19,6 +19,7 @@ import { codeWriteTool, codeExecuteTool, codeAnalyzeTool } from "../tools/code";
 import { apiCallTool, csvParseTool, jsonQueryTool, dataTransformTool } from "../tools/data";
 import {
   memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
+  memoryRecallTool,
 } from "../tools/memory";
 import { scheduleTaskTool, listTasksTool, cancelTaskTool } from "../tools/scheduler";
 import {
@@ -137,11 +138,14 @@ Create a plan mentally, then execute ALL steps in sequence.
 - data-transform: Transform data between formats using JavaScript
 
 ### 🧠 MEMORY (persistent knowledge)
-- memory-search: Search across all memory files
+- memory-search: Search across all workspace memory files (text-based)
 - memory-read: Read a specific memory file
 - memory-write: Write/update a memory file
 - memory-log: Append to today's daily log (auto-timestamped)
 - memory-list: List all memory files
+- **memory-recall**: 🔥 SEMANTIC SEARCH — finds past conversations by MEANING using AI embeddings
+  - Use when user asks "what did we talk about X?" or "remember when..."
+  - More powerful than memory-search — understands context, not just keywords
 
 ### 🤖 DELEGATION (specialist agents)
 - delegate-browser-agent: Send web browsing tasks to the Browser specialist
@@ -332,6 +336,7 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
     analyzeImageTool, // Vision AI analysis for screenshots/images
     // Memory
     memorySearchTool, memoryReadTool, memoryWriteTool, memoryLogTool, memoryListTool,
+    memoryRecallTool, // RAG/semantic search across conversations
     // Scheduler
     scheduleTaskTool, listTasksTool, cancelTaskTool,
     // Agent Delegation (Supervisor Pattern)
