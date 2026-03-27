@@ -305,6 +305,42 @@ class KaryaWebSocketServer extends EventEmitter {
         });
       }
     });
+
+    // Workflow events — broadcast to all clients (workflows are global)
+    eventBus.on("workflow:start", (data) => {
+      this.broadcastAll({
+        type: "session",
+        data: { event: "workflow_start", runId: data.runId, workflowId: data.workflowId },
+      });
+    });
+
+    eventBus.on("workflow:complete", (data) => {
+      this.broadcastAll({
+        type: "session",
+        data: { event: "workflow_complete", runId: data.runId, workflowId: data.workflowId, status: data.status },
+      });
+    });
+
+    eventBus.on("workflow:error", (data) => {
+      this.broadcastAll({
+        type: "session",
+        data: { event: "workflow_error", runId: data.runId, workflowId: data.workflowId, error: data.error },
+      });
+    });
+
+    eventBus.on("workflow:resume", (data) => {
+      this.broadcastAll({
+        type: "session",
+        data: { event: "workflow_resume", runId: data.runId, workflowId: data.workflowId },
+      });
+    });
+
+    eventBus.on("workflow:updated", (data) => {
+      this.broadcastAll({
+        type: "session",
+        data: { event: "workflow_updated", runId: data.runId, updates: data.updates },
+      });
+    });
   }
 
   /**
