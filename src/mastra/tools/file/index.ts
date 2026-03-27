@@ -8,6 +8,21 @@ import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
 
+// Workspace directory for file operations (not project root!)
+const WORKSPACE_DIR = path.join(process.cwd(), "workspace");
+
+/**
+ * Resolve file path — relative paths go to workspace, absolute paths stay as-is
+ */
+function resolveFilePath(filePath: string): string {
+  // Absolute path — use as-is
+  if (path.isAbsolute(filePath)) {
+    return filePath;
+  }
+  // Relative path — resolve from workspace
+  return path.join(WORKSPACE_DIR, filePath);
+}
+
 export const readFileTool = createTool({
   id: "file-read",
   description: "Read the contents of a file. Supports text files (txt, json, csv, md, etc).",
@@ -20,7 +35,7 @@ export const readFileTool = createTool({
     size: z.number(),
   }),
   execute: async ({ filePath }) => {
-    const resolved = path.resolve(filePath);
+    const resolved = resolveFilePath(filePath);
     const content = fs.readFileSync(resolved, "utf-8");
     const stats = fs.statSync(resolved);
     return {
@@ -44,7 +59,7 @@ export const writeFileTool = createTool({
     size: z.number(),
   }),
   execute: async ({ filePath, content }) => {
-    const resolved = path.resolve(filePath);
+    const resolved = resolveFilePath(filePath);
     const dir = path.dirname(resolved);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -71,7 +86,7 @@ export const listFilesTool = createTool({
     count: z.number(),
   }),
   execute: async ({ dirPath }) => {
-    const resolved = path.resolve(dirPath);
+    const resolved = resolveFilePath(dirPath);
     const entries = fs.readdirSync(resolved, { withFileTypes: true });
     const files = entries.map((e) => {
       const prefix = e.isDirectory() ? "📁 " : "📄 ";
@@ -98,8 +113,8 @@ export const moveFileTool = createTool({
     to: z.string(),
   }),
   execute: async ({ source, destination }) => {
-    const src = path.resolve(source);
-    const dest = path.resolve(destination);
+    const src = resolveFilePath(source);
+    const dest = resolveFilePath(destination);
     const destDir = path.dirname(dest);
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });
@@ -126,7 +141,7 @@ export const searchFilesTool = createTool({
     count: z.number(),
   }),
   execute: async ({ dirPath, pattern }) => {
-    const resolved = path.resolve(dirPath);
+    const resolved = resolveFilePath(dirPath);
     const matches: string[] = [];
     const searchPattern = pattern.toLowerCase().replace(/\*/g, "");
 

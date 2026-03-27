@@ -4,6 +4,21 @@ import * as fs from "fs";
 import * as path from "path";
 import { execSync } from "child_process";
 
+// Workspace directory for file operations (not project root!)
+const WORKSPACE_DIR = path.join(process.cwd(), "workspace");
+
+/**
+ * Resolve file path — relative paths go to workspace, absolute paths stay as-is
+ */
+function resolveFilePath(filePath: string): string {
+  // Absolute path — use as-is
+  if (path.isAbsolute(filePath)) {
+    return filePath;
+  }
+  // Relative path — resolve from workspace
+  return path.join(WORKSPACE_DIR, filePath);
+}
+
 export const codeWriteTool = createTool({
   id: "code-write",
   description:
@@ -23,7 +38,7 @@ export const codeWriteTool = createTool({
   }),
   execute: async ({ filePath, code, language }) => {
     try {
-      const resolved = path.resolve(filePath);
+      const resolved = resolveFilePath(filePath);
       const dir = path.dirname(resolved);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(resolved, code, "utf-8");
@@ -102,7 +117,7 @@ export const codeAnalyzeTool = createTool({
   }),
   execute: async ({ filePath }) => {
     try {
-      const resolved = path.resolve(filePath);
+      const resolved = resolveFilePath(filePath);
       const content = fs.readFileSync(resolved, "utf-8");
       const ext = path.extname(resolved).toLowerCase();
       const lines = content.split("\n");
