@@ -113,6 +113,10 @@ const MINIMAL_OUTPUT_TOOLS: Record<string, (result: any) => string> = {
   // Skills
   "skill-list": (r) => `📚 ${r?.count || r?.skills?.length || 0} skills available`,
   "skill-create": (r) => r?.success ? `✨ Skill created: ${r.skillName}` : "❌ Skill creation failed",
+  // Web/Browser
+  "web-search": (r) => r?.results?.length ? `🔍 Found ${r.results.length} results` : "🔍 Search completed",
+  "browser-navigate": (r) => r?.success ? `🌐 Opened: ${r.url?.slice(0, 50)}...` : "❌ Navigation failed",
+  "browser-extract": (r) => r?.success ? `📊 Data extracted` : "❌ Extraction failed",
 };
 
 /**
