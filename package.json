@@ -1,11 +1,16 @@
 {
-  "name": "karya",
+  "name": "karya-ai",
   "version": "0.1.0",
-  "description": "Karya — AI Computer Agent that DOES real things",
-  "main": "src/mastra/index.ts",
+  "description": "Karya — AI Computer Agent that DOES real things. 73 tools, 9 workflows, 6 agents.",
+  "main": "dist/cli/index.js",
+  "types": "dist/cli/index.d.ts",
   "bin": {
     "karya": "./dist/cli/index.js"
   },
+  "files": [
+    "dist/cli",
+    "README.md"
+  ],
   "scripts": {
     "test": "tsx src/test-agent.ts",
     "dev": "next dev --port 3000",
@@ -13,7 +18,16 @@
     "start": "next start",
     "agent": "tsx src/test-agent.ts",
     "cli": "tsx src/cli/index.ts",
-    "build:cli": "tsc -p tsconfig.cli.json"
+    "build:cli": "tsc -p tsconfig.cli.json",
+    "prepublishOnly": "npm run build:cli"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kulharir7/karya.git"
+  },
+  "homepage": "https://github.com/kulharir7/karya#readme",
+  "bugs": {
+    "url": "https://github.com/kulharir7/karya/issues"
   },
   "keywords": [
     "ai",
