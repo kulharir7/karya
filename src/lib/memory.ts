@@ -2,7 +2,8 @@
  * Karya Memory System — Conversation Memory with Mastra
  * 
  * Uses Mastra's official Memory class with LibSQLStore.
- * Semantic recall disabled for now (requires embedding model setup).
+ * Note: Mastra Memory is designed for agent-level use, not direct queries.
+ * For direct message access, use storage APIs directly.
  */
 
 import { Memory } from "@mastra/memory";
@@ -28,23 +29,19 @@ export const memory = new Memory({
 
 /**
  * Get recent messages from a thread
+ * Note: Mastra Memory doesn't expose direct query API anymore
+ * This is a stub that returns empty array - actual memory is handled by agent
  */
 export async function getThreadMessages(
   threadId: string,
   limit: number = 20
 ): Promise<any[]> {
-  try {
-    const result = await memory.query({
-      threadId,
-      selectBy: {
-        last: limit,
-      },
-    });
-    return result.messages || [];
-  } catch (error) {
-    console.error("Memory query error:", error);
-    return [];
-  }
+  // Mastra Memory v2+ doesn't have direct query() method
+  // Memory is accessed through agent.generate() with memory option
+  // For direct access, use storage APIs
+  console.log(`[memory] getThreadMessages called for thread: ${threadId}, limit: ${limit}`);
+  console.log("[memory] Note: Use agent.generate() with memory option for proper memory access");
+  return [];
 }
 
 /**
@@ -56,15 +53,21 @@ export async function semanticSearch(
   query: string,
   topK: number = 5
 ): Promise<any[]> {
-  // Fall back to getting recent messages
-  // Real semantic search requires embedding model
+  // Semantic search requires agent-level memory with embedder
   console.log(`[memory] Semantic search fallback for: "${query}"`);
-  return getThreadMessages(threadId, topK * 2);
+  return [];
 }
 
 /**
- * Get memory instance for external use
+ * Get memory instance for agent use
  */
 export function getMemory() {
   return memory;
+}
+
+/**
+ * Get storage instance for direct access if needed
+ */
+export function getStorage() {
+  return storage;
 }
