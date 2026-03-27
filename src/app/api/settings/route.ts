@@ -1,18 +1,21 @@
 /**
- * Settings API — LLM Provider Configuration
+ * Settings API — LLM Provider Configuration (OpenClaw-style)
  * 
  * GET: Retrieve current settings
- * POST: Update settings (provider, model, API keys)
+ * POST: Update settings (provider, model, API keys, tokens, params)
  */
 
 import { NextRequest } from "next/server";
 import { 
   getConfig, 
   saveConfig, 
-  testApiKey, 
+  testApiKey,
+  validateSetupToken,
   PROVIDER_MODELS,
   LLMProvider,
-  LLMConfig 
+  LLMConfig,
+  hasValidAuth,
+  ModelParams,
 } from "@/lib/llm";
 
 export async function GET(req: NextRequest) {
@@ -20,44 +23,50 @@ export async function GET(req: NextRequest) {
   const action = url.searchParams.get("action");
 
   if (action === "models") {
-    // Return available models per provider
     return Response.json({ models: PROVIDER_MODELS });
   }
 
-  if (action === "test") {
-    // Test an API key
+  if (action === "test-key") {
     const provider = url.searchParams.get("provider") as LLMProvider;
     const key = url.searchParams.get("key") || "";
     const result = await testApiKey(provider, key);
     return Response.json(result);
   }
 
-  // Return current config (mask API keys)
+  // Return current config (mask secrets)
   const config = getConfig();
-  const masked: LLMConfig = {
-    ...config,
-    apiKeys: {
-      anthropic: config.apiKeys.anthropic ? "sk-ant-***" + config.apiKeys.anthropic.slice(-4) : "",
-      openai: config.apiKeys.openai ? "sk-***" + config.apiKeys.openai.slice(-4) : "",
-      google: config.apiKeys.google ? "***" + config.apiKeys.google.slice(-4) : "",
-      openrouter: config.apiKeys.openrouter ? "sk-***" + config.apiKeys.openrouter.slice(-4) : "",
+  
+  const masked: any = {
+    provider: config.provider,
+    model: config.model,
+    modelParams: config.modelParams,
+    anthropic: {
+      authMethod: config.anthropic?.authMethod || "api-key",
+      hasSetupToken: !!config.anthropic?.setupToken,
     },
     customProvider: {
-      ...config.customProvider,
-      apiKey: config.customProvider.apiKey ? "***" + config.customProvider.apiKey.slice(-4) : "",
+      name: config.customProvider.name,
+      baseURL: config.customProvider.baseURL,
+      hasApiKey: !!config.customProvider.apiKey,
+    },
+    hasKeys: {
+      anthropic: hasValidAuth("anthropic"),
+      openai: hasValidAuth("openai"),
+      google: hasValidAuth("google"),
+      openrouter: hasValidAuth("openrouter"),
+      ollama: true,
+      custom: hasValidAuth("custom"),
+    },
+    // Masked key previews
+    keyPreviews: {
+      anthropic: config.apiKeys.anthropic ? "sk-ant-***" + config.apiKeys.anthropic.slice(-4) : null,
+      openai: config.apiKeys.openai ? "sk-***" + config.apiKeys.openai.slice(-4) : null,
+      google: config.apiKeys.google ? "***" + config.apiKeys.google.slice(-4) : null,
+      openrouter: config.apiKeys.openrouter ? "sk-***" + config.apiKeys.openrouter.slice(-4) : null,
     },
   };
 
-  return Response.json({
-    config: masked,
-    hasKeys: {
-      anthropic: !!config.apiKeys.anthropic,
-      openai: !!config.apiKeys.openai,
-      google: !!config.apiKeys.google,
-      openrouter: !!config.apiKeys.openrouter,
-      custom: !!config.customProvider.apiKey,
-    },
-  });
+  return Response.json(masked);
 }
 
 export async function POST(req: NextRequest) {
@@ -65,52 +74,120 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action } = body;
 
-    if (action === "setProvider") {
-      // Change provider and model
-      const { provider, model } = body;
-      saveConfig({ provider, model });
-      return Response.json({ success: true, provider, model });
-    }
+    switch (action) {
+      case "setProvider": {
+        const { provider, model } = body;
+        saveConfig({ provider, model });
+        return Response.json({ success: true, provider, model });
+      }
 
-    if (action === "setApiKey") {
-      // Update API key for a provider
-      const { provider, apiKey } = body;
-      const config = getConfig();
-      
-      if (provider === "custom") {
-        saveConfig({
-          customProvider: {
-            ...config.customProvider,
-            apiKey,
-          },
-        });
-      } else {
+      case "setModel": {
+        const { model } = body;
+        saveConfig({ model });
+        return Response.json({ success: true, model });
+      }
+
+      case "setApiKey": {
+        const { provider, apiKey } = body;
+        
+        // Validate key format
+        const validation = await testApiKey(provider, apiKey);
+        if (!validation.valid) {
+          return Response.json({ success: false, error: validation.error }, { status: 400 });
+        }
+        
+        const config = getConfig();
         const apiKeys = { ...config.apiKeys, [provider]: apiKey };
         saveConfig({ apiKeys });
+        
+        return Response.json({ success: true, provider });
       }
-      
-      return Response.json({ success: true, provider });
-    }
 
-    if (action === "setCustomProvider") {
-      // Configure custom OpenAI-compatible provider
-      const { name, baseURL, apiKey } = body;
-      saveConfig({
-        provider: "custom",
-        customProvider: { name, baseURL, apiKey },
-      });
-      return Response.json({ success: true });
-    }
+      case "setSetupToken": {
+        // Anthropic OAuth setup token
+        const { token } = body;
+        
+        const validation = validateSetupToken(token);
+        if (!validation.valid) {
+          return Response.json({ success: false, error: validation.error }, { status: 400 });
+        }
+        
+        saveConfig({
+          anthropic: {
+            authMethod: "setup-token",
+            setupToken: token,
+          },
+        });
+        
+        return Response.json({ success: true });
+      }
 
-    if (action === "setModel") {
-      // Just change model (keep provider)
-      const { model } = body;
-      saveConfig({ model });
-      return Response.json({ success: true, model });
-    }
+      case "setAnthropicAuth": {
+        // Switch Anthropic auth method
+        const { method, apiKey, setupToken } = body;
+        
+        if (method === "api-key") {
+          if (!apiKey) {
+            return Response.json({ success: false, error: "API key required" }, { status: 400 });
+          }
+          const config = getConfig();
+          saveConfig({
+            apiKeys: { ...config.apiKeys, anthropic: apiKey },
+            anthropic: { authMethod: "api-key" },
+          });
+        } else if (method === "setup-token") {
+          if (!setupToken) {
+            return Response.json({ success: false, error: "Setup token required" }, { status: 400 });
+          }
+          saveConfig({
+            anthropic: { authMethod: "setup-token", setupToken },
+          });
+        }
+        
+        return Response.json({ success: true, method });
+      }
 
-    return Response.json({ error: "Unknown action" }, { status: 400 });
+      case "setModelParams": {
+        // Set model-specific params (fastMode, caching, etc.)
+        const { model, params } = body as { model: string; params: ModelParams };
+        const config = getConfig();
+        const modelParams = { ...config.modelParams, [model]: params };
+        saveConfig({ modelParams });
+        return Response.json({ success: true, model, params });
+      }
+
+      case "setCustomProvider": {
+        const { name, baseURL, apiKey } = body;
+        saveConfig({
+          provider: "custom",
+          customProvider: { name: name || "custom", baseURL, apiKey: apiKey || "" },
+        });
+        return Response.json({ success: true });
+      }
+
+      case "clearAuth": {
+        // Clear auth for a provider
+        const { provider } = body;
+        const config = getConfig();
+        
+        if (provider === "anthropic") {
+          saveConfig({
+            apiKeys: { ...config.apiKeys, anthropic: "" },
+            anthropic: { authMethod: "api-key", setupToken: undefined },
+          });
+        } else {
+          const apiKeys = { ...config.apiKeys, [provider]: "" };
+          saveConfig({ apiKeys });
+        }
+        
+        return Response.json({ success: true });
+      }
+
+      default:
+        return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });
+    }
   } catch (error: any) {
+    console.error("Settings API error:", error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
