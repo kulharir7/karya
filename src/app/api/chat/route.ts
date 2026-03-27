@@ -83,6 +83,12 @@ const TOOL_NAME_MAP: Record<string, string> = {
   suggestRecoveryTool: "suggest-recovery",
   logRecoveryTool: "log-recovery",
   confidenceCheckTool: "confidence-check",
+  // Git
+  gitStatusTool: "git-status",
+  gitCommitTool: "git-commit",
+  gitPushTool: "git-push",
+  gitLogTool: "git-log",
+  gitDiffTool: "git-diff",
 };
 
 function resolveToolName(raw: string): string {

@@ -73,6 +73,12 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   "pass-context": { icon: "📤", label: "Pass Context", runText: "Passing data to agent..." },
   "agent-handoff": { icon: "🔗", label: "Agent Handoff", runText: "Chaining agents..." },
   "code-review": { icon: "🔍", label: "Code Review", runText: "Reviewing code..." },
+  // Git
+  "git-status": { icon: "🔀", label: "Git Status", runText: "Checking git status..." },
+  "git-commit": { icon: "💾", label: "Git Commit", runText: "Committing changes..." },
+  "git-push": { icon: "🚀", label: "Git Push", runText: "Pushing to remote..." },
+  "git-log": { icon: "📜", label: "Git Log", runText: "Loading commit history..." },
+  "git-diff": { icon: "📝", label: "Git Diff", runText: "Checking changes..." },
 };
 
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };

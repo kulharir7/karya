@@ -27,6 +27,7 @@ import {
 import { createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusTool } from "../tools/planning";
 import { suggestRecoveryTool, logRecoveryTool } from "../tools/recovery";
 import { confidenceCheckTool } from "../tools/confidence";
+import { gitStatusTool, gitCommitTool, gitPushTool, gitLogTool, gitDiffTool } from "../tools/git";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -132,6 +133,13 @@ For every task:
 - suggest-recovery: When ANY tool fails, call this IMMEDIATELY. It suggests alternative approaches.
 - log-recovery: Record successful recoveries for future learning.
 
+### 🔀 GIT (version control)
+- git-status: Check branch, modified files, working tree state
+- git-commit: Stage and commit changes (confirm with user first!)
+- git-push: Push to remote (confirm with user first!)
+- git-log: Show recent commits
+- git-diff: Show changes in working directory or staging area
+
 ### ⏰ SCHEDULER (automated tasks)
 - task-schedule: Create recurring or one-shot tasks (hourly/daily/weekly/once)
 - task-list: List all scheduled tasks with status
@@ -216,5 +224,7 @@ Example: "Download all images from this website and resize them"
     suggestRecoveryTool, logRecoveryTool,
     // Confidence (Point 10)
     confidenceCheckTool,
+    // Git (Point 48)
+    gitStatusTool, gitCommitTool, gitPushTool, gitLogTool, gitDiffTool,
   },
 });

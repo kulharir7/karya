@@ -57,6 +57,9 @@ import { suggestRecoveryTool, logRecoveryTool } from "../tools/recovery";
 // Confidence tools (Point 10)
 import { confidenceCheckTool } from "../tools/confidence";
 
+// Git tools (Point 48)
+import { gitStatusTool, gitCommitTool, gitPushTool, gitLogTool, gitDiffTool } from "../tools/git";
+
 /**
  * Karya MCP Server — exposes ALL 32 tools to external MCP clients.
  * 
@@ -155,6 +158,13 @@ export function createKaryaMCPServer() {
 
       // === Confidence (1) ===
       confidenceCheckTool,
+
+      // === Git (5) ===
+      gitStatusTool,
+      gitCommitTool,
+      gitPushTool,
+      gitLogTool,
+      gitDiffTool,
     },
   });
 }

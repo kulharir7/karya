@@ -160,6 +160,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [activeAgent, setActiveAgent] = useState<{ agent: string; confidence: number; reason: string } | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -295,11 +296,15 @@ export default function Home() {
     const msg = input.trim();
     setInput(""); setIsLoading(true); setStreamingText(""); setStreamingTools([]); setTaskCount((c) => c + 1);
 
+    // Abort controller for cancel button (Point 56)
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+
     try {
-      // Send sessionId — server handles history from DB
       const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: msg, sessionId: activeId }),
+        signal: abortController.signal,
       });
       if (!res.ok) throw new Error("Server error");
 
@@ -522,6 +527,13 @@ export default function Home() {
                 <span className="text-xs text-purple-600 font-medium">
                   {streamingTools.length > 0 ? `Using ${streamingTools[streamingTools.length-1]?.toolName}...` : streamingText ? "Generating..." : "Thinking..."}
                 </span>
+                <button
+                  onClick={() => { abortRef.current?.abort(); setIsLoading(false); setStreamingText(""); setStreamingTools([]); }}
+                  className="px-2 py-0.5 rounded text-[10px] text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all font-medium"
+                  title="Cancel"
+                >
+                  ■ Stop
+                </button>
               </div>
             )}
             {/* Session switcher dropdown */}
