@@ -59,11 +59,18 @@ async function streamChat(message: string, sessionId: string = "cli-session"): P
   const spinner = ora("Thinking...").start();
   
   try {
+    // AbortController for timeout (2 minutes)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    
     const response = await fetch(`${API_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, sessionId }),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeout);
 
     if (!response.ok) {
       spinner.fail("Request failed");
@@ -188,21 +195,38 @@ program
       spinner.stop();
 
       console.log(logo);
-      console.log(chalk.bold(`\n📦 ${data.count || data.tools?.length || 0} Tools Available\n`));
+      
+      // Handle different API response formats
+      let tools: string[] = [];
+      if (data.tools && Array.isArray(data.tools)) {
+        tools = data.tools.map((t: any) => t.name || t.id || t);
+      } else if (data.toolsets) {
+        // Flatten toolsets
+        for (const ts of Object.values(data.toolsets) as any[]) {
+          if (ts.tools) {
+            tools.push(...Object.keys(ts.tools));
+          }
+        }
+      }
+      
+      console.log(chalk.bold(`\n📦 ${tools.length} Tools Available\n`));
 
-      const tools = data.tools || [];
+      if (tools.length === 0) {
+        console.log(chalk.gray("  No tools found. Make sure the server is running."));
+        return;
+      }
+
       const categories: Record<string, string[]> = {};
 
-      for (const tool of tools) {
-        const name = tool.name || tool;
+      for (const name of tools) {
         const category = name.split("-")[0] || "other";
         if (!categories[category]) categories[category] = [];
         categories[category].push(name);
       }
 
-      for (const [cat, toolList] of Object.entries(categories)) {
+      for (const [cat, toolList] of Object.entries(categories).sort()) {
         console.log(chalk.yellow(`\n${cat.toUpperCase()}`));
-        for (const t of toolList) {
+        for (const t of toolList.sort()) {
           console.log(chalk.gray(`  • ${t}`));
         }
       }
