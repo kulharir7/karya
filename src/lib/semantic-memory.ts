@@ -114,9 +114,16 @@ export async function createFastEmbedMemory(): Promise<Memory | null> {
   try {
     // Dynamic import
     const { fastembed } = await import("@mastra/fastembed");
+    
+    if (!fastembed) {
+      console.log("[semantic-memory] FastEmbed module loaded but no embedder found");
+      return null;
+    }
+    
+    console.log("[semantic-memory] FastEmbed loaded successfully");
     return createSemanticMemory({ embedder: fastembed, topK: 5, messageRange: 2 });
-  } catch (err) {
-    console.log("[semantic-memory] FastEmbed not available, using basic memory");
+  } catch (err: any) {
+    console.log("[semantic-memory] FastEmbed not available:", err.message);
     return null;
   }
 }
