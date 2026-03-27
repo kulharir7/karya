@@ -90,6 +90,17 @@ export async function POST(req: NextRequest) {
       case "setApiKey": {
         const { provider, apiKey } = body;
         
+        // For Anthropic, detect if it's an OAuth token vs API key
+        if (provider === "anthropic") {
+          if (apiKey.startsWith("sk-ant-oat")) {
+            // This is an OAuth/setup token, not API key
+            saveConfig({
+              anthropic: { authMethod: "setup-token", setupToken: apiKey },
+            });
+            return Response.json({ success: true, provider, authMethod: "setup-token" });
+          }
+        }
+        
         // Validate key format
         const validation = await testApiKey(provider, apiKey);
         if (!validation.valid) {
@@ -98,7 +109,16 @@ export async function POST(req: NextRequest) {
         
         const config = getConfig();
         const apiKeys = { ...config.apiKeys, [provider]: apiKey };
-        saveConfig({ apiKeys });
+        
+        // For Anthropic, clear setup token when setting API key
+        if (provider === "anthropic") {
+          saveConfig({ 
+            apiKeys,
+            anthropic: { authMethod: "api-key", setupToken: undefined }
+          });
+        } else {
+          saveConfig({ apiKeys });
+        }
         
         return Response.json({ success: true, provider });
       }
