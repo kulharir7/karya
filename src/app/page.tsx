@@ -597,30 +597,45 @@ export default function Home() {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto px-5 py-5 space-y-4">
-              {messages.map((msg) => (
-                <div key={msg.id}>
+              {messages.map((msg, idx) => (
+                <div key={msg.id} className="group/msg">
                   {msg.role === "user" && (
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600 shrink-0 mt-0.5">U</div>
-                      <div><div className="text-[10px] text-gray-400 mb-0.5">You · {new Date(msg.timestamp).toLocaleTimeString()}</div><p className="text-sm text-gray-800">{msg.content}</p></div>
+                    <div className="py-3 px-1">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold text-white shrink-0">R</div>
+                        <span className="text-[12px] font-medium text-[var(--text-primary)]">You</span>
+                        <span className="text-[10px] text-[var(--text-muted)]">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                      <div className="pl-8">
+                        <p className="text-[13.5px] text-[var(--text-primary)] leading-relaxed">{msg.content}</p>
+                      </div>
                     </div>
                   )}
                   {msg.role === "assistant" && (
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-xs shrink-0 mt-0.5">⚡</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[10px] text-gray-400 mb-1">Karya · {new Date(msg.timestamp).toLocaleTimeString()}</div>
+                    <div className="py-3 px-1 rounded-xl hover:bg-[var(--bg-hover)] transition-colors">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-[10px] text-white shrink-0">⚡</div>
+                        <span className="text-[12px] font-medium text-[var(--text-primary)]">Karya</span>
+                        <span className="text-[10px] text-[var(--text-muted)]">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                        {/* Tool count chip (Point 58) */}
+                        {msg.toolCalls && msg.toolCalls.length > 0 && (
+                          <span className="text-[10px] text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded-full font-medium">
+                            ✦ {msg.toolCalls.length} tool{msg.toolCalls.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+                      <div className="pl-8">
                         {msg.toolCalls?.map((t, i) => <ToolCard key={i} toolName={t.toolName} status={t.status === "done" ? "done" : "error"} args={t.args} result={t.result} />)}
                         {msg.content && (
-                          <div className="mt-1 group/msg relative">
+                          <div className="mt-1">
                             <MessageContent content={msg.content} />
-                            {/* Message actions */}
-                            <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity flex items-center gap-1 mt-1.5">
-                              <button onClick={() => navigator.clipboard.writeText(msg.content)} className="text-[10px] text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-all" title="Copy">📋 Copy</button>
-                              <button onClick={() => quickSend(messages[messages.indexOf(msg) - 1]?.content || "")} className="text-[10px] text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-all" title="Retry">🔄 Retry</button>
-                            </div>
                           </div>
                         )}
+                        {/* Message actions (Point 64) */}
+                        <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity flex items-center gap-0.5 mt-2 -ml-1">
+                          <button onClick={() => navigator.clipboard.writeText(msg.content)} className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 py-1 rounded-md hover:bg-[var(--bg-secondary)] transition-all" title="Copy">📋 Copy</button>
+                          <button onClick={() => quickSend(messages[idx - 1]?.content || "")} className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 py-1 rounded-md hover:bg-[var(--bg-secondary)] transition-all" title="Retry">🔄 Retry</button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -628,23 +643,33 @@ export default function Home() {
               ))}
 
               {(streamingTools.length > 0 || streamingText || (isLoading && !streamingText && streamingTools.length === 0)) && (
-                <div className="flex items-start gap-3">
-                  <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-xs shrink-0 mt-0.5">⚡</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-gray-400 mb-1 flex items-center gap-2">
-                      <span>Karya</span>
-                      {activeAgent && activeAgent.agent !== "supervisor" && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600 text-[9px] font-medium">
-                          {activeAgent.agent === "browser" && "🌐 Browser Agent"}
-                          {activeAgent.agent === "file" && "📁 File Agent"}
-                          {activeAgent.agent === "coder" && "💻 Coder Agent"}
-                          {activeAgent.agent === "researcher" && "🔍 Researcher"}
-                          {activeAgent.agent === "data-analyst" && "📊 Data Analyst"}
-                        </span>
-                      )}
-                    </div>
+                <div className="py-3 px-1">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-[10px] text-white shrink-0">⚡</div>
+                    <span className="text-[12px] font-medium text-[var(--text-primary)]">Karya</span>
+                    {activeAgent && activeAgent.agent !== "supervisor" && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[10px] font-medium border border-purple-500/20">
+                        {activeAgent.agent === "browser" && "🌐 Browser"}
+                        {activeAgent.agent === "file" && "📁 File"}
+                        {activeAgent.agent === "coder" && "💻 Coder"}
+                        {activeAgent.agent === "researcher" && "🔍 Research"}
+                        {activeAgent.agent === "data-analyst" && "📊 Data"}
+                      </span>
+                    )}
+                    {streamingTools.length > 0 && (
+                      <span className="text-[10px] text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded-full font-medium">
+                        ✦ {streamingTools.length} tool{streamingTools.length > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                  <div className="pl-8">
                     {streamingTools.map((t, i) => <ToolCard key={i} toolName={t.toolName} status={t.status} args={t.args} result={t.result} />)}
-                    {streamingText && <div className="mt-1"><MessageContent content={streamingText} /><span className="inline-block w-0.5 h-4 bg-purple-500 animate-pulse rounded-sm ml-0.5 align-text-bottom" /></div>}
+                    {streamingText && (
+                      <div className="mt-1">
+                        <MessageContent content={streamingText} />
+                        <span className="inline-block w-0.5 h-4 bg-purple-500 animate-pulse rounded-sm ml-0.5 align-text-bottom" />
+                      </div>
+                    )}
                     {isLoading && !streamingText && streamingTools.length === 0 && (
                       <ThinkingIndicator agent={activeAgent} />
                     )}
