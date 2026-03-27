@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { getRiskLevel, getRiskDisplay, type RiskLevel } from "@/lib/tool-permissions";
 
 interface ToolCardProps {
@@ -8,7 +7,7 @@ interface ToolCardProps {
   status: "running" | "done" | "error";
   args?: any;
   result?: any;
-  showRisk?: boolean; // Show risk badge (default: true)
+  showRisk?: boolean;
 }
 
 const TOOL_META: Record<string, { icon: string; label: string; runText: string }> = {
@@ -45,37 +44,29 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
   "data-csv-parse": { icon: "📊", label: "Parse CSV", runText: "Parsing CSV..." },
   "data-json-query": { icon: "🔎", label: "Query JSON", runText: "Querying JSON..." },
   "data-transform": { icon: "🔄", label: "Transform Data", runText: "Transforming data..." },
-  // Memory
   "memory-search": { icon: "🧠", label: "Search Memory", runText: "Searching memory..." },
   "memory-read": { icon: "📖", label: "Read Memory", runText: "Reading memory..." },
   "memory-write": { icon: "✏️", label: "Write Memory", runText: "Saving to memory..." },
   "memory-log": { icon: "📝", label: "Log Activity", runText: "Logging activity..." },
   "memory-list": { icon: "📋", label: "List Memory", runText: "Listing memory files..." },
-  // Scheduler
   "task-schedule": { icon: "⏰", label: "Schedule Task", runText: "Scheduling task..." },
   "task-list": { icon: "📋", label: "List Tasks", runText: "Listing tasks..." },
   "task-cancel": { icon: "❌", label: "Cancel Task", runText: "Cancelling task..." },
-  // Delegation
   "delegate-browser-agent": { icon: "🌐", label: "Browser Agent", runText: "Delegating to Browser Agent..." },
   "delegate-file-agent": { icon: "📁", label: "File Agent", runText: "Delegating to File Agent..." },
   "delegate-coder-agent": { icon: "💻", label: "Coder Agent", runText: "Delegating to Coder Agent..." },
   "delegate-researcher-agent": { icon: "🔍", label: "Researcher", runText: "Delegating to Researcher..." },
   "delegate-data-analyst-agent": { icon: "📊", label: "Data Analyst", runText: "Delegating to Data Analyst..." },
-  // Planning
   "create-plan": { icon: "📋", label: "Create Plan", runText: "Planning approach..." },
   "execute-plan-step": { icon: "▶️", label: "Execute Step", runText: "Executing step..." },
   "review-output": { icon: "🔍", label: "Self-Review", runText: "Reviewing output quality..." },
   "get-plan-status": { icon: "📊", label: "Plan Status", runText: "Checking plan..." },
-  // Recovery
   "suggest-recovery": { icon: "🔄", label: "Find Alternative", runText: "Finding alternative approach..." },
   "log-recovery": { icon: "✅", label: "Recovery Logged", runText: "Logging recovery..." },
-  // Confidence
   "confidence-check": { icon: "🎯", label: "Confidence Check", runText: "Assessing confidence..." },
-  // Agent Communication
   "pass-context": { icon: "📤", label: "Pass Context", runText: "Passing data to agent..." },
   "agent-handoff": { icon: "🔗", label: "Agent Handoff", runText: "Chaining agents..." },
   "code-review": { icon: "🔍", label: "Code Review", runText: "Reviewing code..." },
-  // Git
   "git-status": { icon: "🔀", label: "Git Status", runText: "Checking git status..." },
   "git-commit": { icon: "💾", label: "Git Commit", runText: "Committing changes..." },
   "git-push": { icon: "🚀", label: "Git Push", runText: "Pushing to remote..." },
@@ -86,73 +77,57 @@ const TOOL_META: Record<string, { icon: string; label: string; runText: string }
 const DEFAULT_META = { icon: "🔧", label: "Tool", runText: "Working..." };
 
 /**
- * Format tool output for display
- * - Parse JSON strings and pretty-print
- * - Handle objects with key-value display
- * - Truncate long output
+ * Format tool output for display — clean key-value pairs
  */
-function formatOutput(result: any): string {
-  const MAX_LENGTH = 3000;
-  
-  // If it's already a string, try to parse as JSON for pretty printing
+function formatOutput(result: any): { type: 'text' | 'table'; content: string | Array<{key: string; value: string}> } {
+  // If it's already a string, try to parse as JSON
   if (typeof result === "string") {
-    // Try to parse as JSON
     try {
       const parsed = JSON.parse(result);
-      return formatObject(parsed, MAX_LENGTH);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        return { type: 'table', content: objectToKeyValue(parsed) };
+      }
+      return { type: 'text', content: JSON.stringify(parsed, null, 2) };
     } catch {
-      // Not JSON, return as-is (truncated)
-      return result.slice(0, MAX_LENGTH);
+      return { type: 'text', content: result.slice(0, 2000) };
     }
   }
   
-  // If it's an object, format it nicely
-  if (typeof result === "object" && result !== null) {
-    return formatObject(result, MAX_LENGTH);
+  // If it's an object, convert to key-value
+  if (typeof result === "object" && result !== null && !Array.isArray(result)) {
+    return { type: 'table', content: objectToKeyValue(result) };
   }
   
-  // Fallback
-  return String(result).slice(0, MAX_LENGTH);
+  return { type: 'text', content: String(result).slice(0, 2000) };
 }
 
-/**
- * Format object as readable key-value pairs
- */
-function formatObject(obj: Record<string, any>, maxLength: number): string {
-  const lines: string[] = [];
-  
-  for (const [key, value] of Object.entries(obj)) {
-    // Convert camelCase to Title Case, but keep acronyms together (GB, CPU, etc.)
+function objectToKeyValue(obj: Record<string, any>): Array<{key: string; value: string}> {
+  return Object.entries(obj).map(([key, value]) => {
+    // Format key: camelCase → Title Case
     const displayKey = key
-      .replace(/([a-z])([A-Z])/g, '$1 $2')  // camelCase split
-      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')  // handle consecutive caps
-      .replace(/^./, s => s.toUpperCase())  // capitalize first letter
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+      .replace(/^./, s => s.toUpperCase())
       .trim();
-    let displayValue: string;
     
+    // Format value
+    let displayValue: string;
     if (typeof value === "object" && value !== null) {
-      // Nested object - compact JSON
-      displayValue = JSON.stringify(value, null, 2);
+      displayValue = JSON.stringify(value);
     } else if (typeof value === "number") {
-      // Format numbers nicely
-      if (key.toLowerCase().includes("gb") || key.toLowerCase().includes("memory")) {
+      if (key.toLowerCase().includes("memory") && value < 100) {
         displayValue = `${value.toFixed(1)} GB`;
-      } else if (key.toLowerCase().includes("percent") || key.toLowerCase().includes("usage")) {
-        displayValue = `${value.toFixed(1)}%`;
       } else {
         displayValue = value.toLocaleString();
       }
     } else if (typeof value === "boolean") {
-      displayValue = value ? "✓ Yes" : "✗ No";
+      displayValue = value ? "Yes" : "No";
     } else {
       displayValue = String(value);
     }
     
-    lines.push(`${displayKey}: ${displayValue}`);
-  }
-  
-  const output = lines.join('\n');
-  return output.slice(0, maxLength);
+    return { key: displayKey, value: displayValue };
+  });
 }
 
 // Risk badge component
@@ -160,11 +135,8 @@ function RiskBadge({ risk }: { risk: RiskLevel }) {
   const display = getRiskDisplay(risk);
   return (
     <span
-      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide shrink-0"
-      style={{
-        backgroundColor: display.bgColor,
-        color: display.color,
-      }}
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide"
+      style={{ backgroundColor: display.bgColor, color: display.color }}
       title={display.description}
     >
       {display.emoji} {display.label}
@@ -173,81 +145,65 @@ function RiskBadge({ risk }: { risk: RiskLevel }) {
 }
 
 export default function ToolCard({ toolName, status, args, result, showRisk = true }: ToolCardProps) {
-  const [open, setOpen] = useState(false);
   const meta = TOOL_META[toolName] || DEFAULT_META;
   const riskLevel = getRiskLevel(toolName);
-
-  const hasContent = (args && Object.keys(args).length > 0) || result;
+  const isRunning = status === "running";
+  const hasResult = result !== undefined && result !== null;
+  const output = hasResult ? formatOutput(result) : null;
 
   return (
-    <div className={`rounded-lg overflow-hidden my-1.5 border ${
-      status === "running"
+    <div className={`rounded-xl overflow-hidden my-2 border ${
+      isRunning
         ? "border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50"
-        : "border-gray-200 bg-gray-50"
+        : "border-gray-200 bg-white"
     }`}>
-      <button
-        onClick={() => hasContent && setOpen(!open)}
-        className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors ${
-          hasContent ? "hover:bg-black/[0.02] cursor-pointer" : "cursor-default"
-        }`}
-      >
+      {/* Header */}
+      <div className="flex items-center gap-2.5 px-4 py-3">
         {/* Status icon */}
-        {status === "running" ? (
+        {isRunning ? (
           <div className="w-5 h-5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin shrink-0" />
         ) : (
-          <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center shrink-0">
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+              <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </div>
         )}
 
-        {/* Label */}
+        {/* Tool name */}
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <span className="text-sm">{meta.icon}</span>
-          <span className="text-[13px] text-gray-700">
-            {status === "running" ? (
-              <span className="text-amber-700 font-medium">{meta.runText}</span>
+          <span className="text-base">{meta.icon}</span>
+          <span className="text-sm font-medium text-gray-800">
+            {isRunning ? (
+              <span className="text-amber-700">{meta.runText}</span>
             ) : (
-              <>
-                <span className="font-medium text-gray-800">{meta.label}</span>
-                {args && Object.keys(args).length > 0 && (
-                  <span className="text-gray-400 ml-1.5 text-xs">
-                    {Object.values(args).filter(v => typeof v === "string").map(v => `"${(v as string).slice(0, 30)}"`).join(", ")}
-                  </span>
-                )}
-              </>
+              meta.label
             )}
           </span>
         </div>
 
         {/* Risk Badge */}
-        {showRisk && (
-          <RiskBadge risk={riskLevel} />
-        )}
+        {showRisk && <RiskBadge risk={riskLevel} />}
+      </div>
 
-        {/* Expand */}
-        {hasContent && (
-          <span className={`text-gray-300 text-xs transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
-        )}
-      </button>
-
-      {/* Expanded */}
-      {open && hasContent && (
-        <div className="px-3.5 pb-3 space-y-2 border-t border-gray-200/60">
-          {args && Object.keys(args).length > 0 && (
-            <div className="mt-2">
-              <div className="text-[10px] font-semibold text-blue-500 uppercase mb-1">Input</div>
-              <pre className="text-[11px] text-gray-600 bg-white rounded-md p-2.5 overflow-x-auto max-h-28 font-mono border border-gray-100 leading-relaxed">
-                {typeof args === "string" ? args : JSON.stringify(args, null, 2)}
-              </pre>
+      {/* Output — always visible when done */}
+      {hasResult && output && (
+        <div className="border-t border-gray-100 bg-gray-50/50">
+          {output.type === 'table' ? (
+            <div className="px-4 py-3">
+              <div className="space-y-1.5">
+                {(output.content as Array<{key: string; value: string}>).map(({ key, value }, i) => (
+                  <div key={i} className="flex gap-3 text-sm">
+                    <span className="text-gray-500 min-w-[120px] shrink-0">{key}</span>
+                    <span className="text-gray-800 font-medium break-all">{value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
-          {result && (
-            <div>
-              <div className="text-[10px] font-semibold text-green-600 uppercase mb-1">Output</div>
-              <pre className="text-[11px] text-gray-600 bg-white rounded-md p-2.5 overflow-x-auto max-h-48 font-mono border border-gray-100 leading-relaxed whitespace-pre-wrap break-words">
-                {formatOutput(result)}
-              </pre>
-            </div>
+          ) : (
+            <pre className="px-4 py-3 text-xs text-gray-700 font-mono overflow-x-auto max-h-48 whitespace-pre-wrap break-words">
+              {output.content as string}
+            </pre>
           )}
         </div>
       )}
