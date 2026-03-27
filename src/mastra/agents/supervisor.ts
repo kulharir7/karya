@@ -151,9 +151,7 @@ Create a plan mentally, then execute ALL steps in sequence.
 - memory-write: Write/update a memory file
 - memory-log: Append to today's daily log (auto-timestamped)
 - memory-list: List all memory files
-- **memory-recall**: 🔥 SEMANTIC SEARCH — finds past conversations by MEANING using AI embeddings
-  - Use when user asks "what did we talk about X?" or "remember when..."
-  - More powerful than memory-search — understands context, not just keywords
+- **memory-recall**: ⚠️ EXPERIMENTAL — semantic search (currently limited, prefer memory-search)
 
 ### 🤖 DELEGATION (specialist agents)
 - delegate-browser-agent: Send web browsing tasks to the Browser specialist

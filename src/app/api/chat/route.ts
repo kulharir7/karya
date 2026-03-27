@@ -97,6 +97,14 @@ const TOOL_NAME_MAP: Record<string, string> = {
   skillMatchTool: "skill-match",
   skillLoadTool: "skill-load",
   skillCreateTool: "skill-create",
+  // Workflows
+  workflowListTool: "workflow-list",
+  workflowRunTool: "workflow-run",
+  workflowStatusTool: "workflow-status",
+  workflowHistoryTool: "workflow-history",
+  workflowResumeTool: "workflow-resume",
+  workflowCancelTool: "workflow-cancel",
+  workflowStatsTool: "workflow-stats",
 };
 
 function resolveToolName(raw: string): string {

@@ -82,23 +82,49 @@ export const clipboardWriteTool = createTool({
 
 export const notifyTool = createTool({
   id: "system-notify",
-  description: "Show a desktop notification to the user.",
+  description: "Show a desktop notification (toast) to the user. Non-blocking.",
   inputSchema: z.object({
     title: z.string().describe("Notification title"),
     message: z.string().describe("Notification message"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
+    error: z.string().optional(),
   }),
   execute: async ({ title, message }) => {
     try {
-      execSync(
-        `powershell "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.MessageBox]::Show('${message.replace(/'/g, "''")}', '${title.replace(/'/g, "''")}')"`,
-        { encoding: "utf-8", timeout: 10000 }
-      );
+      // Use BurntToast module if available, fallback to BalloonTip
+      const script = `
+$title = '${title.replace(/'/g, "''")}'
+$msg = '${message.replace(/'/g, "''")}'
+try {
+  # Try BurntToast (best UX)
+  if (Get-Module -ListAvailable -Name BurntToast) {
+    Import-Module BurntToast
+    New-BurntToastNotification -Text $title, $msg
+  } else {
+    # Fallback: System tray balloon
+    Add-Type -AssemblyName System.Windows.Forms
+    $notify = New-Object System.Windows.Forms.NotifyIcon
+    $notify.Icon = [System.Drawing.SystemIcons]::Information
+    $notify.Visible = $true
+    $notify.ShowBalloonTip(5000, $title, $msg, 'Info')
+    Start-Sleep -Seconds 1
+    $notify.Dispose()
+  }
+} catch {
+  Write-Error $_.Exception.Message
+  exit 1
+}
+`;
+      execSync(`powershell -Command "${script.replace(/\n/g, ' ')}"`, {
+        encoding: "utf-8",
+        timeout: 10000,
+        windowsHide: true,
+      });
       return { success: true };
-    } catch {
-      return { success: false };
+    } catch (err: any) {
+      return { success: false, error: err.message };
     }
   },
 });

@@ -145,14 +145,15 @@ export const memoryListTool = createTool({
 
 /**
  * Semantic Memory Recall — RAG-based search across conversation history.
- * Uses vector embeddings to find semantically similar past messages.
+ * NOTE: Currently returns empty results (Mastra Memory v2 requires embedder setup).
+ * Use memory-search for text-based search instead.
  */
 export const memoryRecallTool = createTool({
   id: "memory-recall",
   description:
-    "Semantic search through past conversations using AI embeddings. " +
-    "Use when you need to recall what the user said about a topic, or find related discussions. " +
-    "This is MORE POWERFUL than memory-search — it understands MEANING, not just keywords.",
+    "⚠️ EXPERIMENTAL — Semantic search through past conversations. " +
+    "Currently limited — use memory-search instead for reliable results. " +
+    "Will be improved when embedding model is configured.",
   inputSchema: z.object({
     query: z.string().describe("What to search for — can be natural language, questions, or topics"),
     threadId: z.string().optional().describe("Session/thread ID to search in. Leave empty for current session."),
