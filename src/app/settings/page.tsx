@@ -3,9 +3,22 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-interface Settings {
+type LLMProvider = "anthropic" | "openai" | "google" | "openrouter" | "ollama" | "custom";
+
+interface LLMConfig {
+  provider: LLMProvider;
   model: string;
-  baseUrl: string;
+  apiKeys: {
+    anthropic: string;
+    openai: string;
+    google: string;
+    openrouter: string;
+  };
+  customProvider: {
+    name: string;
+    baseURL: string;
+    apiKey: string;
+  };
 }
 
 interface MCPServer {
@@ -17,42 +30,78 @@ interface MCPServer {
   enabled: boolean;
 }
 
-interface MCPTestResult {
-  success: boolean;
-  toolCount: number;
-  tools: string[];
-  error?: string;
-}
+const PROVIDER_INFO: Record<LLMProvider, { name: string; icon: string; description: string }> = {
+  anthropic: { name: "Anthropic", icon: "🤖", description: "Claude models (recommended)" },
+  openai: { name: "OpenAI", icon: "🧠", description: "GPT-4, GPT-3.5, o1" },
+  google: { name: "Google", icon: "✨", description: "Gemini models" },
+  openrouter: { name: "OpenRouter", icon: "🌐", description: "Multi-provider gateway" },
+  ollama: { name: "Ollama", icon: "🦙", description: "Local models" },
+  custom: { name: "Custom", icon: "⚙️", description: "OpenAI-compatible API" },
+};
 
-const MODELS = [
-  { id: "gpt-oss:120b", name: "GPT-OSS 120B", speed: "⚡ Fast", desc: "Good general model" },
-  { id: "qwen3-coder:480b", name: "Qwen3 Coder 480B", speed: "⏳ Medium", desc: "Best for code tasks" },
-  { id: "deepseek-r1:671b", name: "DeepSeek R1 671B", speed: "🐢 Slow", desc: "Deep reasoning" },
-  { id: "glm-5:cloud", name: "GLM-5 Cloud", speed: "⏳ Medium", desc: "Chinese language model" },
-  { id: "qwen3:235b", name: "Qwen3 235B", speed: "⏳ Medium", desc: "Strong general purpose" },
-  { id: "gemma3:27b", name: "Gemma 3 27B", speed: "⚡ Fast", desc: "Google's lightweight" },
-];
+const PROVIDER_MODELS: Record<LLMProvider, { id: string; name: string; speed: string }[]> = {
+  anthropic: [
+    { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", speed: "⚡ Fast" },
+    { id: "claude-opus-4-20250514", name: "Claude Opus 4", speed: "🧠 Smartest" },
+    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", speed: "⚡ Fast" },
+    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", speed: "⚡⚡ Fastest" },
+  ],
+  openai: [
+    { id: "gpt-4o", name: "GPT-4o", speed: "⚡ Fast" },
+    { id: "gpt-4o-mini", name: "GPT-4o Mini", speed: "⚡⚡ Fastest" },
+    { id: "o1", name: "o1 (Reasoning)", speed: "🧠 Deep" },
+    { id: "o1-mini", name: "o1 Mini", speed: "⚡ Fast" },
+  ],
+  google: [
+    { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", speed: "⚡⚡ Fastest" },
+    { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", speed: "🧠 Smart" },
+    { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", speed: "⚡ Fast" },
+  ],
+  openrouter: [
+    { id: "anthropic/claude-sonnet-4", name: "Claude Sonnet 4", speed: "⚡ Fast" },
+    { id: "openai/gpt-4o", name: "GPT-4o", speed: "⚡ Fast" },
+    { id: "google/gemini-2.0-flash", name: "Gemini 2.0 Flash", speed: "⚡⚡ Fastest" },
+    { id: "meta-llama/llama-3.3-70b", name: "Llama 3.3 70B", speed: "⚡ Fast" },
+    { id: "deepseek/deepseek-chat-v3", name: "DeepSeek v3", speed: "💰 Cheap" },
+  ],
+  ollama: [
+    { id: "llama3.3", name: "Llama 3.3", speed: "⚡ Local" },
+    { id: "qwen2.5-coder", name: "Qwen 2.5 Coder", speed: "⚡ Local" },
+    { id: "deepseek-coder-v2", name: "DeepSeek Coder", speed: "⚡ Local" },
+  ],
+  custom: [],
+};
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>({ model: "gpt-oss:120b", baseUrl: "https://ollama.com/v1" });
-  const [saved, setSaved] = useState(false);
+  // LLM State
+  const [config, setConfig] = useState<LLMConfig | null>(null);
+  const [hasKeys, setHasKeys] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  
+  // API Key input
+  const [showKeyInput, setShowKeyInput] = useState<LLMProvider | null>(null);
+  const [newApiKey, setNewApiKey] = useState("");
+  
+  // Custom provider
+  const [customName, setCustomName] = useState("");
+  const [customURL, setCustomURL] = useState("");
+  const [customKey, setCustomKey] = useState("");
 
   // MCP State
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [mcpLoading, setMcpLoading] = useState(true);
-  const [showAddMCP, setShowAddMCP] = useState(false);
-  const [newMCP, setNewMCP] = useState({ name: "", url: "", transport: "streamable-http" as const, apiKey: "" });
-  const [testingId, setTestingId] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<MCPTestResult | null>(null);
-  const [addTesting, setAddTesting] = useState(false);
-  const [addTestResult, setAddTestResult] = useState<MCPTestResult | null>(null);
 
-  // Load settings
+  // Load config
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((s) => { setSettings(s); setLoading(false); })
+      .then((data) => {
+        setConfig(data.config);
+        setHasKeys(data.hasKeys || {});
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
 
@@ -60,421 +109,290 @@ export default function SettingsPage() {
   useEffect(() => {
     fetch("/api/mcp")
       .then((r) => r.json())
-      .then((d) => { setMcpServers(d.servers || []); setMcpLoading(false); })
+      .then((data) => {
+        setMcpServers(data.servers || []);
+        setMcpLoading(false);
+      })
       .catch(() => setMcpLoading(false));
   }, []);
 
-  const saveSettings = async () => {
+  // Save provider
+  const saveProvider = async (provider: LLMProvider, model: string) => {
+    setSaving(true);
     await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings),
+      body: JSON.stringify({ action: "setProvider", provider, model }),
     });
+    setConfig((c) => c ? { ...c, provider, model } : c);
+    setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
-  // MCP Actions
-  const addMCPServer = async () => {
-    if (!newMCP.name.trim() || !newMCP.url.trim()) return;
-    const res = await fetch("/api/mcp", {
+  // Save API key
+  const saveApiKey = async (provider: LLMProvider) => {
+    if (!newApiKey) return;
+    setSaving(true);
+    await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add", ...newMCP }),
+      body: JSON.stringify({ action: "setApiKey", provider, apiKey: newApiKey }),
     });
-    const data = await res.json();
-    if (data.success) {
-      setMcpServers(data.servers);
-      setNewMCP({ name: "", url: "", transport: "streamable-http", apiKey: "" });
-      setShowAddMCP(false);
-      setAddTestResult(null);
-    }
+    setHasKeys((h) => ({ ...h, [provider]: true }));
+    setNewApiKey("");
+    setShowKeyInput(null);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
-  const removeMCPServer = async (id: string) => {
-    const res = await fetch("/api/mcp", {
+  // Save custom provider
+  const saveCustomProvider = async () => {
+    if (!customURL) return;
+    setSaving(true);
+    await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "remove", id }),
+      body: JSON.stringify({
+        action: "setCustomProvider",
+        name: customName || "custom",
+        baseURL: customURL,
+        apiKey: customKey,
+      }),
     });
-    const data = await res.json();
-    if (data.success) setMcpServers(data.servers);
-  };
-
-  const toggleMCPServer = async (id: string) => {
-    const res = await fetch("/api/mcp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "toggle", id }),
-    });
-    const data = await res.json();
-    if (data.success) setMcpServers(data.servers);
-  };
-
-  const testMCPServer = async (id: string) => {
-    setTestingId(id);
-    setTestResult(null);
-    try {
-      const res = await fetch("/api/mcp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "test", id }),
-      });
-      const result = await res.json();
-      setTestResult(result);
-    } catch (err: any) {
-      setTestResult({ success: false, toolCount: 0, tools: [], error: err.message });
-    }
-    setTestingId(null);
-  };
-
-  const testNewMCPUrl = async () => {
-    if (!newMCP.url.trim()) return;
-    setAddTesting(true);
-    setAddTestResult(null);
-    try {
-      const res = await fetch("/api/mcp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "test-url",
-          url: newMCP.url,
-          transport: newMCP.transport,
-          apiKey: newMCP.apiKey,
-        }),
-      });
-      const result = await res.json();
-      setAddTestResult(result);
-    } catch (err: any) {
-      setAddTestResult({ success: false, toolCount: 0, tools: [], error: err.message });
-    }
-    setAddTesting(false);
+    setConfig((c) => c ? { ...c, provider: "custom" } : c);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[var(--bg-primary)]">
-        <div className="w-6 h-6 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Loading settings...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)]">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-[var(--bg-secondary)] border-b border-[var(--border)]">
-        <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">← Back</Link>
-            <span className="text-[var(--text-muted)]">·</span>
-            <h1 className="text-sm font-semibold text-[var(--text-primary)]">Settings</h1>
-          </div>
-          <button
-            onClick={saveSettings}
-            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              saved
-                ? "bg-green-100 text-green-700"
-                : "bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
-            }`}
-          >
-            {saved ? "✓ Saved!" : "Save Changes"}
-          </button>
+      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/" className="text-gray-400 hover:text-gray-600">
+            ← Back
+          </Link>
+          <h1 className="text-xl font-semibold">⚙️ Settings</h1>
         </div>
+        {saved && (
+          <div className="text-green-600 flex items-center gap-2">
+            ✓ Saved
+          </div>
+        )}
       </div>
 
-      <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
-        {/* === AI Model === */}
-        <section>
-          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-            AI Model
-          </h2>
-          <div className="space-y-2">
-            {MODELS.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => setSettings({ ...settings, model: m.id })}
-                className={`w-full flex items-center justify-between p-3.5 rounded-lg border text-left transition-all ${
-                  settings.model === m.id
-                    ? "border-purple-400 bg-purple-50 ring-1 ring-purple-200"
-                    : "border-[var(--border)] bg-[var(--bg-secondary)] hover:border-gray-300"
-                }`}
-              >
-                <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{m.name}</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">{m.desc}</p>
-                </div>
-                <span className="text-xs text-[var(--text-secondary)]">{m.speed}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* === API Configuration === */}
-        <section>
-          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-            API Configuration
-          </h2>
-          <div className="bg-[var(--bg-secondary)] rounded-lg border border-[var(--border)] p-4">
-            <label className="text-xs text-[var(--text-muted)] mb-1 block">Base URL</label>
-            <input
-              type="text"
-              value={settings.baseUrl}
-              onChange={(e) => setSettings({ ...settings, baseUrl: e.target.value })}
-              className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-100"
-            />
-          </div>
-        </section>
-
-        {/* === MCP Servers === */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-              MCP Servers
-            </h2>
-            <button
-              onClick={() => setShowAddMCP(!showAddMCP)}
-              className="text-xs font-medium text-purple-600 hover:text-purple-800 transition-colors"
-            >
-              {showAddMCP ? "Cancel" : "+ Add Server"}
-            </button>
-          </div>
-
-          {/* Add new server form */}
-          {showAddMCP && (
-            <div className="bg-[var(--bg-secondary)] rounded-lg border border-purple-200 p-4 mb-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-[var(--text-muted)] mb-1 block">Server Name</label>
-                  <input
-                    type="text"
-                    value={newMCP.name}
-                    onChange={(e) => setNewMCP({ ...newMCP, name: e.target.value })}
-                    placeholder="My MCP Server"
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-purple-400"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--text-muted)] mb-1 block">Transport</label>
-                  <select
-                    value={newMCP.transport}
-                    onChange={(e) => setNewMCP({ ...newMCP, transport: e.target.value as any })}
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-purple-400"
-                  >
-                    <option value="streamable-http">Streamable HTTP</option>
-                    <option value="sse">SSE (Legacy)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-[var(--text-muted)] mb-1 block">Server URL</label>
-                <input
-                  type="text"
-                  value={newMCP.url}
-                  onChange={(e) => setNewMCP({ ...newMCP, url: e.target.value })}
-                  placeholder="http://localhost:3001/mcp"
-                  className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-purple-400"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-[var(--text-muted)] mb-1 block">
-                  API Key <span className="text-[var(--text-muted)]">(optional)</span>
-                </label>
-                <input
-                  type="password"
-                  value={newMCP.apiKey}
-                  onChange={(e) => setNewMCP({ ...newMCP, apiKey: e.target.value })}
-                  placeholder="Bearer token or API key"
-                  className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-purple-400"
-                />
-              </div>
-
-              {/* Test result for new server */}
-              {addTestResult && (
-                <div
-                  className={`rounded-lg p-3 text-xs ${
-                    addTestResult.success
-                      ? "bg-green-50 border border-green-200 text-green-700"
-                      : "bg-red-50 border border-red-200 text-red-700"
+      <div className="max-w-4xl mx-auto p-6 space-y-8">
+        {/* LLM Provider Section */}
+        <section className="bg-white rounded-xl border p-6">
+          <h2 className="text-lg font-semibold mb-4">🤖 AI Model Provider</h2>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+            {(Object.keys(PROVIDER_INFO) as LLMProvider[]).map((provider) => {
+              const info = PROVIDER_INFO[provider];
+              const isActive = config?.provider === provider;
+              const hasKey = hasKeys[provider] || provider === "ollama";
+              
+              return (
+                <button
+                  key={provider}
+                  onClick={() => {
+                    if (hasKey || provider === "custom") {
+                      const models = PROVIDER_MODELS[provider];
+                      const defaultModel = models[0]?.id || "";
+                      saveProvider(provider, defaultModel);
+                    } else {
+                      setShowKeyInput(provider);
+                    }
+                  }}
+                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                    isActive
+                      ? "border-purple-500 bg-purple-50"
+                      : hasKey
+                      ? "border-gray-200 hover:border-purple-300"
+                      : "border-dashed border-gray-300 hover:border-gray-400"
                   }`}
                 >
-                  {addTestResult.success ? (
-                    <>
-                      <p className="font-medium">✅ Connected — {addTestResult.toolCount} tools found</p>
-                      {addTestResult.tools.length > 0 && (
-                        <p className="mt-1 text-[10px] opacity-80">
-                          {addTestResult.tools.slice(0, 10).join(", ")}
-                          {addTestResult.tools.length > 10 && ` +${addTestResult.tools.length - 10} more`}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="font-medium">❌ Failed: {addTestResult.error}</p>
-                  )}
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={testNewMCPUrl}
-                  disabled={!newMCP.url.trim() || addTesting}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 transition-all"
-                >
-                  {addTesting ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
-                      Testing...
-                    </span>
-                  ) : (
-                    "🔌 Test Connection"
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xl">{info.icon}</span>
+                    <span className="font-medium">{info.name}</span>
+                    {isActive && <span className="text-purple-600 text-xs">✓ Active</span>}
+                  </div>
+                  <div className="text-xs text-gray-500">{info.description}</div>
+                  {!hasKey && provider !== "custom" && provider !== "ollama" && (
+                    <div className="text-xs text-amber-600 mt-1">+ Add API key</div>
                   )}
                 </button>
+              );
+            })}
+          </div>
+
+          {/* API Key Input Modal */}
+          {showKeyInput && showKeyInput !== "custom" && (
+            <div className="bg-gray-50 rounded-lg p-4 mb-4 border">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-medium">
+                  🔑 Enter {PROVIDER_INFO[showKeyInput].name} API Key
+                </h3>
                 <button
-                  onClick={addMCPServer}
-                  disabled={!newMCP.name.trim() || !newMCP.url.trim()}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-40 transition-all"
+                  onClick={() => setShowKeyInput(null)}
+                  className="text-gray-400 hover:text-gray-600"
                 >
-                  Add Server
+                  ✕
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={newApiKey}
+                  onChange={(e) => setNewApiKey(e.target.value)}
+                  placeholder={showKeyInput === "anthropic" ? "sk-ant-api03-..." : "sk-..."}
+                  className="flex-1 px-3 py-2 border rounded-lg font-mono text-sm"
+                />
+                <button
+                  onClick={() => saveApiKey(showKeyInput)}
+                  disabled={!newApiKey || saving}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {saving ? "..." : "Save"}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {showKeyInput === "anthropic" && "Get key: console.anthropic.com/settings/keys"}
+                {showKeyInput === "openai" && "Get key: platform.openai.com/api-keys"}
+                {showKeyInput === "google" && "Get key: aistudio.google.com/apikey"}
+                {showKeyInput === "openrouter" && "Get key: openrouter.ai/keys"}
+              </p>
+            </div>
+          )}
+
+          {/* Custom Provider Setup */}
+          {config?.provider === "custom" && (
+            <div className="bg-gray-50 rounded-lg p-4 mb-4 border">
+              <h3 className="font-medium mb-3">⚙️ Custom Provider Setup</h3>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="Provider name (e.g., ollama-cloud)"
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
+                <input
+                  type="text"
+                  value={customURL}
+                  onChange={(e) => setCustomURL(e.target.value)}
+                  placeholder="Base URL (e.g., https://ollama.com/v1)"
+                  className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                />
+                <input
+                  type="password"
+                  value={customKey}
+                  onChange={(e) => setCustomKey(e.target.value)}
+                  placeholder="API Key (optional)"
+                  className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                />
+                <button
+                  onClick={saveCustomProvider}
+                  disabled={!customURL || saving}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : "Save Custom Provider"}
                 </button>
               </div>
             </div>
           )}
 
-          {/* Server list */}
-          {mcpLoading ? (
-            <div className="bg-[var(--bg-secondary)] rounded-lg border border-[var(--border)] p-8 flex items-center justify-center">
-              <div className="w-4 h-4 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+          {/* Model Selection */}
+          {config?.provider && config.provider !== "custom" && PROVIDER_INFO[config.provider] && (
+            <div>
+              <h3 className="font-medium mb-3">
+                📦 Select Model ({PROVIDER_INFO[config.provider]?.name || config.provider})
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                {(PROVIDER_MODELS[config.provider] || []).map((model) => (
+                  <button
+                    key={model.id}
+                    onClick={() => saveProvider(config.provider, model.id)}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      config.model === model.id
+                        ? "border-purple-500 bg-purple-50"
+                        : "border-gray-200 hover:border-purple-300"
+                    }`}
+                  >
+                    <div className="font-medium text-sm">{model.name}</div>
+                    <div className="text-xs text-gray-500">{model.speed}</div>
+                  </button>
+                ))}
+              </div>
             </div>
+          )}
+
+          {/* Current Config Display */}
+          {config?.provider && (
+            <div className="mt-6 pt-4 border-t text-sm text-gray-600">
+              <strong>Current:</strong>{" "}
+              {PROVIDER_INFO[config.provider]?.name || config.provider} → {config?.model || "not set"}
+            </div>
+          )}
+        </section>
+
+        {/* MCP Servers Section */}
+        <section className="bg-white rounded-xl border p-6">
+          <h2 className="text-lg font-semibold mb-4">🔌 MCP Servers</h2>
+          
+          {mcpLoading ? (
+            <div className="text-gray-500">Loading...</div>
           ) : mcpServers.length === 0 ? (
-            <div className="bg-[var(--bg-secondary)] rounded-lg border border-dashed border-[var(--border)] p-6 text-center">
-              <p className="text-2xl mb-2">🔌</p>
-              <p className="text-sm text-[var(--text-secondary)]">No MCP servers connected</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
-                Add servers to extend Karya with external tools
-              </p>
+            <div className="text-gray-500 text-center py-8">
+              No MCP servers configured.
+              <br />
+              <Link href="/help" className="text-purple-600 hover:underline">
+                Learn how to add MCP servers →
+              </Link>
             </div>
           ) : (
             <div className="space-y-2">
               {mcpServers.map((server) => (
                 <div
                   key={server.id}
-                  className={`bg-[var(--bg-secondary)] rounded-lg border p-4 transition-all ${
-                    server.enabled
-                      ? "border-[var(--border)]"
-                      : "border-[var(--border)] opacity-60"
-                  }`}
+                  className="flex items-center justify-between p-3 rounded-lg border"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <button
-                        onClick={() => toggleMCPServer(server.id)}
-                        className={`w-9 h-5 rounded-full transition-colors relative ${
-                          server.enabled ? "bg-green-500" : "bg-gray-300"
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                            server.enabled ? "left-[18px]" : "left-0.5"
-                          }`}
-                        />
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">
-                          {server.name}
-                        </p>
-                        <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">
-                          {server.url}
-                          <span className="ml-2 px-1 py-0.5 rounded bg-[var(--bg-primary)] text-[9px]">
-                            {server.transport}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 ml-3">
-                      <button
-                        onClick={() => testMCPServer(server.id)}
-                        disabled={testingId === server.id}
-                        className="px-2.5 py-1 rounded-md text-[10px] font-medium border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-40 transition-all"
-                      >
-                        {testingId === server.id ? (
-                          <span className="flex items-center gap-1">
-                            <span className="w-2.5 h-2.5 rounded-full border-[1.5px] border-purple-400 border-t-transparent animate-spin" />
-                            Testing
-                          </span>
-                        ) : (
-                          "Test"
-                        )}
-                      </button>
-                      <button
-                        onClick={() => removeMCPServer(server.id)}
-                        className="px-2 py-1 rounded-md text-[10px] text-red-500 hover:bg-red-50 transition-all"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                  <div>
+                    <div className="font-medium">{server.name}</div>
+                    <div className="text-xs text-gray-500 font-mono">{server.url}</div>
                   </div>
-
-                  {/* Test result inline */}
-                  {testResult && testingId === null && testResult === testResult && (
-                    <div
-                      className={`mt-3 rounded-md p-2.5 text-xs ${
-                        testResult.success
-                          ? "bg-green-50 text-green-700"
-                          : "bg-red-50 text-red-700"
-                      }`}
-                    >
-                      {testResult.success
-                        ? `✅ Connected — ${testResult.toolCount} tools: ${testResult.tools.slice(0, 5).join(", ")}${testResult.tools.length > 5 ? "..." : ""}`
-                        : `❌ ${testResult.error}`}
-                    </div>
-                  )}
+                  <div className={`px-2 py-1 rounded text-xs ${
+                    server.enabled ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                  }`}>
+                    {server.enabled ? "ON" : "OFF"}
+                  </div>
                 </div>
               ))}
             </div>
           )}
-
-          <p className="text-[10px] text-[var(--text-muted)] mt-2">
-            MCP servers extend Karya with external tools. Connect to Cursor, Claude Desktop, or any MCP-compatible service.
-          </p>
         </section>
 
-        {/* === About === */}
-        <section>
-          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-            About
-          </h2>
-          <div className="bg-[var(--bg-secondary)] rounded-lg border border-[var(--border)] p-4 space-y-1.5 text-sm text-[var(--text-secondary)]">
-            <p>
-              <span className="text-[var(--text-muted)]">Version</span>{" "}
-              <span className="font-medium text-[var(--text-primary)]">1.0.0</span>
-            </p>
-            <p>
-              <span className="text-[var(--text-muted)]">Stack</span>{" "}
-              <span className="font-medium text-[var(--text-primary)]">Mastra + Stagehand + Next.js</span>
-            </p>
-            <p>
-              <span className="text-[var(--text-muted)]">Tools</span>{" "}
-              <span className="font-medium text-[var(--text-primary)]">
-                32 built-in + {mcpServers.filter((s) => s.enabled).length} MCP servers
-              </span>
-            </p>
-            <p>
-              <span className="text-[var(--text-muted)]">MCP Server</span>{" "}
-              <span className="font-medium text-[var(--text-primary)]">Port 3001 (32 tools exposed)</span>
-            </p>
-            <p>
-              <span className="text-[var(--text-muted)]">GitHub</span>{" "}
-              <a
-                href="https://github.com/kulharir7/karya"
-                target="_blank"
-                className="text-purple-600 hover:underline"
-              >
-                kulharir7/karya
-              </a>
-            </p>
-          </div>
+        {/* Quick Info */}
+        <section className="bg-gray-100 rounded-xl p-4 text-sm text-gray-600">
+          <h3 className="font-semibold mb-2">💡 Tips</h3>
+          <ul className="space-y-1 list-disc list-inside">
+            <li><strong>Anthropic Claude</strong> — Best for coding, recommended</li>
+            <li><strong>OpenAI GPT-4o</strong> — Great all-around, fast</li>
+            <li><strong>Google Gemini</strong> — Free tier available</li>
+            <li><strong>OpenRouter</strong> — Access all models with one key</li>
+            <li><strong>Ollama</strong> — Run locally, no API key needed</li>
+          </ul>
         </section>
       </div>
     </div>

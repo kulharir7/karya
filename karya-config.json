@@ -1,0 +1,15 @@
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-20250514",
+  "apiKeys": {
+    "anthropic": "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",
+    "openai": "",
+    "google": "",
+    "openrouter": ""
+  },
+  "customProvider": {
+    "name": "custom",
+    "baseURL": "https://ollama.com/v1",
+    "apiKey": "03f6e5ea5db24549ad9260f0f89d3d72.FvHS6Rn07JLSIOpqS2tE9E4M"
+  }
+}
