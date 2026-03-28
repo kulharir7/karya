@@ -648,14 +648,51 @@ export default function SettingsPage() {
           )}
         </section>
 
+        {/* Test Model */}
+        <section className="bg-white rounded-xl border p-6">
+          <h2 className="text-lg font-semibold mb-3">🧪 Test Current Model</h2>
+          <p className="text-sm text-gray-500 mb-4">Send a test message to verify the model is working. Changes take effect <strong>instantly</strong> — no restart needed.</p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={async () => {
+                setSaving(true); setError("");
+                try {
+                  const res = await fetch("/api/v1/model", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "test" }),
+                  });
+                  const data = await res.json();
+                  if (data.data?.success) {
+                    showSuccess();
+                    setError(`✅ "${data.data.response}" (${data.data.latencyMs}ms)`);
+                  } else {
+                    setError(`❌ ${data.data?.error || "Test failed"}`);
+                  }
+                } catch (e: any) { setError(`❌ ${e.message}`); }
+                setSaving(false);
+              }}
+              disabled={saving}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? "Testing..." : "🧪 Test Model"}
+            </button>
+            <span className="text-xs text-gray-400">
+              Current: <code className="bg-gray-100 px-1.5 py-0.5 rounded">{config?.provider}/{config?.model}</code>
+            </span>
+          </div>
+          {error && error.startsWith("✅") && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{error}</div>
+          )}
+        </section>
+
         {/* Tips */}
         <section className="bg-gray-100 rounded-xl p-4 text-sm text-gray-600">
           <h3 className="font-semibold mb-2">💡 Quick Tips</h3>
           <ul className="space-y-1 list-disc list-inside">
+            <li><strong>Instant switch</strong> — Model changes apply to the next message, no restart needed</li>
             <li><strong>Claude Sonnet 4</strong> — Best for coding, fast & capable</li>
-            <li><strong>Claude Opus 4</strong> — Most intelligent, complex tasks</li>
-            <li><strong>Setup Token</strong> — Use Claude subscription (run: <code>claude setup-token</code>)</li>
             <li><strong>OpenRouter</strong> — Access all providers with one API key</li>
+            <li><strong>Ollama Cloud</strong> — Use qwen3-coder:480b or gpt-oss:120b</li>
           </ul>
         </section>
         </>}

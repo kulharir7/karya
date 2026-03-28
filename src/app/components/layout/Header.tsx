@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { AgentInfo, ToolCall } from "@/app/hooks/useChat";
 import { icons } from "@/app/components/sidebar/SidebarIcons";
 
@@ -37,7 +37,15 @@ export default function Header({
 }: HeaderProps) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
+  const [currentModel, setCurrentModel] = useState("loading...");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch current model on mount
+  useEffect(() => {
+    fetch("/api/v1/model").then(r => r.json()).then(d => {
+      if (d.data?.displayName) setCurrentModel(d.data.displayName);
+    }).catch(() => {});
+  }, []);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -111,9 +119,9 @@ export default function Header({
 
       {/* Right: Actions */}
       <div className="flex items-center gap-1 shrink-0">
-        {/* Model badge — hidden on mobile */}
-        <span className="hidden lg:flex header-model-badge text-[9px] text-[var(--text-muted)] bg-[var(--bg-tertiary)] px-2 py-1 rounded-md border border-[var(--border)] font-mono mr-1">
-          gpt-oss:120b
+        {/* Model badge — dynamic, hidden on mobile */}
+        <span className="hidden lg:flex header-model-badge text-[9px] text-[var(--text-muted)] bg-[var(--bg-tertiary)] px-2 py-1 rounded-md border border-[var(--border)] font-mono mr-1" title="Current model">
+          {currentModel}
         </span>
 
         {/* Session switcher */}
