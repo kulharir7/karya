@@ -129,6 +129,10 @@ import {
 import {
   pluginListTool, pluginCreateTool, pluginInstallTool, pluginToggleTool, pluginUninstallTool,
 } from "../tools/plugins";
+import { webFetchTool, httpRequestTool, dnsLookupTool, pingTool, networkInfoTool } from "../tools/web";
+import { diskUsageTool, installedAppsTool, setReminderTool, envVarsTool } from "../tools/system/extra";
+import { csvExportTool, markdownToHtmlTool, jsonToTableTool } from "../tools/document";
+import { imageDownloadTool, imageInfoTool, base64EncodeTool } from "../tools/image";
 import { TokenLimiterProcessor } from "@mastra/core/processors";
 import {
   stepControlProcessor,
@@ -528,7 +532,15 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
     workflowHistoryTool, workflowResumeTool, workflowCancelTool, workflowStatsTool,
     // Triggers (Automation — file watchers, clipboard, webhooks)
     triggerCreateTool, triggerListTool, triggerDeleteTool, triggerToggleTool,
-    // Plugins (Extensibility — install, create, manage plugins)
+    // Plugins
     pluginListTool, pluginCreateTool, pluginInstallTool, pluginToggleTool, pluginUninstallTool,
+    // Web & Network
+    webFetchTool, httpRequestTool, dnsLookupTool, pingTool, networkInfoTool,
+    // System Extra
+    diskUsageTool, installedAppsTool, setReminderTool, envVarsTool,
+    // Documents
+    csvExportTool, markdownToHtmlTool, jsonToTableTool,
+    // Images
+    imageDownloadTool, imageInfoTool, base64EncodeTool,
   },
 });
