@@ -1,7 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import { getModel } from "@/lib/llm";
 import { createBasicMemory, getBestMemory } from "@/lib/semantic-memory";
-import { buildSystemPrompt, ensureWorkspace } from "@/lib/system-prompt";
+import { initWorkspace } from "@/lib/memory-engine";
 import { logger } from "@/lib/logger";
 
 // Create memory instance — start with basic, async upgrade to best available
@@ -20,7 +20,7 @@ let memoryUpgraded = false;
 })();
 
 // Ensure workspace exists with default files on startup
-ensureWorkspace();
+initWorkspace();
 
 // Import ALL tools from all categories
 import { navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool } from "../tools/browser";

@@ -1,20 +1,20 @@
-import { NextRequest } from "next/server";
-import { listAgentTypes, routeMessage } from "@/lib/agent-router";
+/**
+ * GET /api/agents — List agents (legacy route, use /api/v1/agents instead)
+ */
+
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-/**
- * GET /api/agents — List all available agents
- * GET /api/agents?route=message — Test LLM routing for a message
- */
-export async function GET(req: NextRequest) {
-  const routeTest = req.nextUrl.searchParams.get("route");
-
-  if (routeTest) {
-    const result = await routeMessage(routeTest);
-    return Response.json({ route: result });
-  }
-
-  const agents = listAgentTypes();
-  return Response.json({ agents, count: agents.length });
+export async function GET() {
+  // Redirect to v1 format
+  const agents = [
+    { id: "karya", name: "Supervisor", icon: "⚡" },
+    { id: "karya-browser", name: "Browser Agent", icon: "🌐" },
+    { id: "karya-file", name: "File Agent", icon: "📁" },
+    { id: "karya-coder", name: "Coder Agent", icon: "💻" },
+    { id: "karya-researcher", name: "Researcher Agent", icon: "🔬" },
+    { id: "karya-data-analyst", name: "Data Analyst", icon: "📊" },
+  ];
+  return NextResponse.json({ agents, count: agents.length });
 }
