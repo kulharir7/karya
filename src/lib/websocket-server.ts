@@ -1,31 +1,57 @@
 /**
  * Karya WebSocket Server — Real-time bidirectional communication
  * 
- * Features:
- * - Persistent connections (no reconnect per message)
- * - Multiple clients simultaneously
- * - Real-time streaming (text-delta, tool-call, tool-result)
- * - Session isolation
- * - Heartbeat/ping-pong
+ * NOW CONNECTED to ChatProcessor (Phase 4.2):
+ * - Client sends { type: "chat", message: "hello" }
+ * - Server processes through ChatProcessor
+ * - Streams text-delta, tool-call, tool-result back via WS
+ * - Multiple clients can subscribe to same session
+ * - Abort support: client sends { type: "abort" } to cancel running request
+ * 
+ * Connection flow:
+ *   1. Client connects → gets welcome + clientId
+ *   2. Client sends { type: "subscribe", sessionId: "xxx" } → subscribed
+ *   3. Client sends { type: "chat", data: { message: "..." } } → agent processes
+ *   4. Server streams events back to ALL clients on that session
+ *   5. Server sends { type: "done" } when complete
+ * 
+ * Auth:
+ *   - Connect with ?token=karya_xxx for authenticated access
+ *   - Or no token if auth is not configured (first-time setup)
  */
 
 import { WebSocketServer, WebSocket } from "ws";
 import { EventEmitter } from "events";
 import { eventBus } from "./event-bus";
+import {
+  processChat,
+  type ChatRequest,
+  type ChatEvents,
+  type ChatResult,
+} from "./chat-processor";
+import { validateToken, hasAnyTokens } from "./api-auth";
 
-// Message types
+// ============================================
+// TYPES
+// ============================================
+
 export type WSMessageType =
-  | "chat"           // User sends message
-  | "text-delta"     // Streaming text chunk
-  | "text"           // Complete text
-  | "tool-call"      // Tool execution started
-  | "tool-result"    // Tool execution finished
-  | "error"          // Error occurred
-  | "session"        // Session events
-  | "ping"           // Heartbeat
-  | "pong"           // Heartbeat response
-  | "subscribe"      // Subscribe to session
-  | "unsubscribe";   // Unsubscribe from session
+  | "chat"           // Client → Server: send message
+  | "abort"          // Client → Server: cancel running request
+  | "subscribe"      // Client → Server: subscribe to session
+  | "unsubscribe"    // Client → Server: unsubscribe from session
+  | "ping"           // Client → Server: heartbeat
+  | "pong"           // Server → Client: heartbeat response
+  | "text-delta"     // Server → Client: streaming text chunk
+  | "text"           // Server → Client: complete text (non-streaming)
+  | "tool-call"      // Server → Client: tool execution started
+  | "tool-result"    // Server → Client: tool execution finished
+  | "done"           // Server → Client: request complete
+  | "error"          // Server → Client: error occurred
+  | "session"        // Server → Client: session events (connected, subscribed, agent_start, etc.)
+  | "sessions-list"  // Client → Server: request session list
+  | "tools-list"     // Client → Server: request tools list
+  | "status";        // Client → Server: request system status
 
 export interface WSMessage {
   type: WSMessageType;
@@ -40,33 +66,65 @@ export interface WSClient {
   sessionId: string | null;
   connectedAt: number;
   lastPing: number;
+  authenticated: boolean;
+  /** AbortController for the currently running chat request */
+  activeAbort: AbortController | null;
+  /** Is this client currently waiting for an agent response? */
+  processing: boolean;
 }
 
-// WebSocket Server class
+// ============================================
+// WEBSOCKET SERVER
+// ============================================
+
 class KaryaWebSocketServer extends EventEmitter {
   private wss: WebSocketServer | null = null;
   private clients: Map<string, WSClient> = new Map();
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private eventBusUnsubscribers: (() => void)[] = [];
   private port: number;
+  private started: boolean = false;
 
   constructor(port: number = 3002) {
     super();
     this.port = port;
   }
 
-  /**
-   * Start the WebSocket server
-   */
+  // ---- SERVER LIFECYCLE ----
+
   start(): void {
     if (this.wss) {
       console.log("[ws] Server already running");
       return;
     }
 
-    this.wss = new WebSocketServer({ port: this.port });
-    console.log(`[ws] WebSocket server started on port ${this.port}`);
+    try {
+      this.wss = new WebSocketServer({ port: this.port });
+      this.started = true;
+      console.log(`[ws] WebSocket server started on port ${this.port}`);
+    } catch (err: any) {
+      console.error(`[ws] Failed to start on port ${this.port}:`, err.message);
+      return;
+    }
 
     this.wss.on("connection", (ws, req) => {
+      // ---- Auth check ----
+      const url = new URL(req.url || "/", `http://localhost:${this.port}`);
+      const token = url.searchParams.get("token");
+      let authenticated = true;
+
+      if (hasAnyTokens()) {
+        if (!token) {
+          authenticated = false;
+        } else {
+          const validation = validateToken(token);
+          if (!validation.valid) {
+            ws.close(4001, "Invalid token");
+            return;
+          }
+        }
+      }
+
       const clientId = this.generateClientId();
       const client: WSClient = {
         id: clientId,
@@ -74,75 +132,87 @@ class KaryaWebSocketServer extends EventEmitter {
         sessionId: null,
         connectedAt: Date.now(),
         lastPing: Date.now(),
+        authenticated,
+        activeAbort: null,
+        processing: false,
       };
 
       this.clients.set(clientId, client);
       console.log(`[ws] Client connected: ${clientId} (total: ${this.clients.size})`);
 
-      // Send welcome message
+      // Welcome message
       this.send(ws, {
         type: "session",
-        data: { event: "connected", clientId },
+        data: {
+          event: "connected",
+          clientId,
+          authenticated,
+          serverTime: new Date().toISOString(),
+        },
       });
 
-      // Handle messages
-      ws.on("message", (data) => {
+      // Message handler
+      ws.on("message", (raw) => {
         try {
-          const message = JSON.parse(data.toString()) as WSMessage;
+          const message = JSON.parse(raw.toString()) as WSMessage;
           this.handleMessage(client, message);
-        } catch (err) {
-          this.send(ws, {
-            type: "error",
-            data: { message: "Invalid JSON" },
-          });
+        } catch {
+          this.send(ws, { type: "error", data: { message: "Invalid JSON" } });
         }
       });
 
-      // Handle close
+      // Disconnect handler
       ws.on("close", () => {
+        // Cancel any running request
+        if (client.activeAbort) {
+          client.activeAbort.abort();
+          client.activeAbort = null;
+        }
         this.clients.delete(clientId);
         console.log(`[ws] Client disconnected: ${clientId} (total: ${this.clients.size})`);
       });
 
-      // Handle error
       ws.on("error", (err) => {
         console.error(`[ws] Client error ${clientId}:`, err.message);
       });
     });
 
-    // Start heartbeat checker
     this.startHeartbeat();
-
-    // Hook into event bus for broadcasting
     this.setupEventBusHooks();
   }
 
-  /**
-   * Stop the WebSocket server
-   */
   stop(): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
 
+    // Unsubscribe from event bus
+    for (const unsub of this.eventBusUnsubscribers) {
+      unsub();
+    }
+    this.eventBusUnsubscribers = [];
+
     if (this.wss) {
-      // Close all client connections
       this.clients.forEach((client) => {
+        if (client.activeAbort) client.activeAbort.abort();
         client.ws.close(1000, "Server shutting down");
       });
       this.clients.clear();
-
       this.wss.close();
       this.wss = null;
+      this.started = false;
       console.log("[ws] WebSocket server stopped");
     }
   }
 
-  /**
-   * Handle incoming message from client
-   */
-  private handleMessage(client: WSClient, message: WSMessage): void {
+  isRunning(): boolean {
+    return this.started && this.wss !== null;
+  }
+
+  // ---- MESSAGE HANDLING ----
+
+  private async handleMessage(client: WSClient, message: WSMessage): Promise<void> {
     const { type, sessionId, data } = message;
 
     switch (type) {
@@ -157,46 +227,252 @@ class KaryaWebSocketServer extends EventEmitter {
           this.send(client.ws, {
             type: "session",
             sessionId,
-            data: { event: "subscribed" },
+            data: { event: "subscribed", sessionId },
           });
           console.log(`[ws] Client ${client.id} subscribed to session ${sessionId}`);
+        } else {
+          this.send(client.ws, { type: "error", data: { message: "sessionId required for subscribe" } });
         }
         break;
 
       case "unsubscribe":
         client.sessionId = null;
-        this.send(client.ws, {
-          type: "session",
-          data: { event: "unsubscribed" },
-        });
+        this.send(client.ws, { type: "session", data: { event: "unsubscribed" } });
         break;
 
       case "chat":
-        // Emit chat message for processing
-        this.emit("chat", {
-          clientId: client.id,
-          sessionId: sessionId || client.sessionId || "default",
-          message: data?.message || data,
-        });
+        await this.handleChat(client, sessionId || client.sessionId || "default", data);
+        break;
+
+      case "abort":
+        this.handleAbort(client);
+        break;
+
+      case "sessions-list":
+        await this.handleSessionsList(client);
+        break;
+
+      case "tools-list":
+        await this.handleToolsList(client);
+        break;
+
+      case "status":
+        await this.handleStatus(client);
         break;
 
       default:
-        console.log(`[ws] Unknown message type: ${type}`);
+        this.send(client.ws, {
+          type: "error",
+          data: { message: `Unknown message type: ${type}` },
+        });
     }
   }
 
-  /**
-   * Send message to a WebSocket client
-   */
+  // ---- CHAT PROCESSING (THE BIG ONE) ----
+
+  private async handleChat(
+    client: WSClient,
+    sessionId: string,
+    data: any
+  ): Promise<void> {
+    const messageText = typeof data === "string" ? data : data?.message;
+
+    if (!messageText || typeof messageText !== "string") {
+      this.send(client.ws, {
+        type: "error",
+        data: { message: "data.message is required" },
+      });
+      return;
+    }
+
+    // Prevent concurrent requests from same client
+    if (client.processing) {
+      this.send(client.ws, {
+        type: "error",
+        data: { message: "Already processing a request. Send 'abort' to cancel." },
+      });
+      return;
+    }
+
+    client.processing = true;
+    client.activeAbort = new AbortController();
+
+    // Auto-subscribe to session if not already
+    if (client.sessionId !== sessionId) {
+      client.sessionId = sessionId;
+    }
+
+    const chatReq: ChatRequest = {
+      message: messageText,
+      sessionId,
+      images: data?.images,
+      channel: "ws",
+    };
+
+    const events: ChatEvents = {
+      onSession: (sid) => {
+        // Broadcast to ALL clients on this session (not just the sender)
+        this.broadcast(sid, {
+          type: "session",
+          data: { event: "agent_start", sessionId: sid },
+        });
+      },
+
+      onTextDelta: (delta) => {
+        this.broadcast(sessionId, {
+          type: "text-delta",
+          data: { delta, sessionId },
+        });
+      },
+
+      onToolCall: (toolName, args) => {
+        this.broadcast(sessionId, {
+          type: "tool-call",
+          data: { toolName, args, sessionId },
+        });
+      },
+
+      onToolResult: (toolName, result) => {
+        this.broadcast(sessionId, {
+          type: "tool-result",
+          data: { toolName, result, sessionId },
+        });
+      },
+
+      onDone: (result: ChatResult) => {
+        this.broadcast(sessionId, {
+          type: "done",
+          data: {
+            sessionId: result.sessionId,
+            text: result.text,
+            toolCount: result.toolCalls.length,
+            durationMs: result.durationMs,
+            tokenEstimate: result.tokenEstimate,
+          },
+        });
+      },
+
+      onError: (error) => {
+        this.broadcast(sessionId, {
+          type: "error",
+          data: { message: error, sessionId },
+        });
+        // Still send done so client knows request is finished
+        this.broadcast(sessionId, {
+          type: "done",
+          data: { sessionId, error: true },
+        });
+      },
+    };
+
+    try {
+      await processChat(chatReq, events);
+    } catch (err: any) {
+      console.error(`[ws] Chat processing error:`, err.message);
+      this.send(client.ws, {
+        type: "error",
+        data: { message: err.message },
+      });
+    } finally {
+      client.processing = false;
+      client.activeAbort = null;
+    }
+  }
+
+  // ---- ABORT ----
+
+  private handleAbort(client: WSClient): void {
+    if (client.activeAbort) {
+      client.activeAbort.abort();
+      client.activeAbort = null;
+      client.processing = false;
+
+      this.send(client.ws, {
+        type: "session",
+        data: { event: "aborted" },
+      });
+      console.log(`[ws] Client ${client.id} aborted request`);
+    } else {
+      this.send(client.ws, {
+        type: "session",
+        data: { event: "nothing_to_abort" },
+      });
+    }
+  }
+
+  // ---- DATA QUERIES VIA WS ----
+
+  private async handleSessionsList(client: WSClient): Promise<void> {
+    try {
+      const { listSessions } = await import("./session-manager");
+      const sessions = await listSessions();
+      this.send(client.ws, {
+        type: "session",
+        data: {
+          event: "sessions_list",
+          sessions: sessions.map((s) => ({
+            id: s.id,
+            name: s.name,
+            messageCount: s.messageCount,
+            updatedAt: s.updatedAt,
+          })),
+        },
+      });
+    } catch (err: any) {
+      this.send(client.ws, { type: "error", data: { message: err.message } });
+    }
+  }
+
+  private async handleToolsList(client: WSClient): Promise<void> {
+    try {
+      const { getAllToolNames, getToolsByCategory } = await import("./chat-processor");
+      this.send(client.ws, {
+        type: "session",
+        data: {
+          event: "tools_list",
+          tools: getAllToolNames(),
+          categories: getToolsByCategory(),
+        },
+      });
+    } catch (err: any) {
+      this.send(client.ws, { type: "error", data: { message: err.message } });
+    }
+  }
+
+  private async handleStatus(client: WSClient): Promise<void> {
+    try {
+      const { listSessions } = await import("./session-manager");
+      const { getAllToolNames } = await import("./chat-processor");
+      const sessions = await listSessions();
+      const tools = getAllToolNames();
+
+      this.send(client.ws, {
+        type: "session",
+        data: {
+          event: "status",
+          server: {
+            uptime: Math.floor(process.uptime()),
+            nodeVersion: process.version,
+            wsClients: this.clients.size,
+          },
+          sessions: sessions.length,
+          tools: tools.length,
+          agents: 6,
+        },
+      });
+    } catch (err: any) {
+      this.send(client.ws, { type: "error", data: { message: err.message } });
+    }
+  }
+
+  // ---- SEND / BROADCAST ----
+
   private send(ws: WebSocket, message: WSMessage): void {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ ...message, timestamp: Date.now() }));
     }
   }
 
-  /**
-   * Broadcast to all clients subscribed to a session
-   */
   broadcast(sessionId: string, message: Omit<WSMessage, "sessionId">): void {
     const fullMessage: WSMessage = { ...message, sessionId, timestamp: Date.now() };
     const json = JSON.stringify(fullMessage);
@@ -208,12 +484,8 @@ class KaryaWebSocketServer extends EventEmitter {
     });
   }
 
-  /**
-   * Broadcast to ALL connected clients
-   */
   broadcastAll(message: WSMessage): void {
     const json = JSON.stringify({ ...message, timestamp: Date.now() });
-
     this.clients.forEach((client) => {
       if (client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(json);
@@ -221,9 +493,6 @@ class KaryaWebSocketServer extends EventEmitter {
     });
   }
 
-  /**
-   * Send to a specific client
-   */
   sendToClient(clientId: string, message: WSMessage): void {
     const client = this.clients.get(clientId);
     if (client) {
@@ -231,152 +500,180 @@ class KaryaWebSocketServer extends EventEmitter {
     }
   }
 
-  /**
-   * Get connected clients count
-   */
+  // ---- GETTERS ----
+
   getClientCount(): number {
     return this.clients.size;
   }
 
-  /**
-   * Get clients for a session
-   */
   getSessionClients(sessionId: string): string[] {
-    const clients: string[] = [];
+    const ids: string[] = [];
     this.clients.forEach((client) => {
-      if (client.sessionId === sessionId) {
-        clients.push(client.id);
-      }
+      if (client.sessionId === sessionId) ids.push(client.id);
     });
-    return clients;
+    return ids;
   }
 
-  /**
-   * Start heartbeat checker (remove stale connections)
-   */
+  getClients(): Array<{
+    id: string;
+    sessionId: string | null;
+    connectedAt: number;
+    processing: boolean;
+    authenticated: boolean;
+  }> {
+    return Array.from(this.clients.values()).map((c) => ({
+      id: c.id,
+      sessionId: c.sessionId,
+      connectedAt: c.connectedAt,
+      processing: c.processing,
+      authenticated: c.authenticated,
+    }));
+  }
+
+  // ---- HEARTBEAT ----
+
   private startHeartbeat(): void {
-    const HEARTBEAT_INTERVAL = 30000; // 30 seconds
-    const HEARTBEAT_TIMEOUT = 60000; // 60 seconds
+    const HEARTBEAT_INTERVAL = 30_000;
+    const HEARTBEAT_TIMEOUT = 90_000; // 90 seconds (more generous)
 
     this.heartbeatInterval = setInterval(() => {
       const now = Date.now();
       this.clients.forEach((client, id) => {
         if (now - client.lastPing > HEARTBEAT_TIMEOUT) {
           console.log(`[ws] Client ${id} timed out, disconnecting`);
+          if (client.activeAbort) client.activeAbort.abort();
           client.ws.terminate();
           this.clients.delete(id);
         }
       });
     }, HEARTBEAT_INTERVAL);
+
+    if (this.heartbeatInterval.unref) {
+      this.heartbeatInterval.unref();
+    }
   }
 
-  /**
-   * Hook into event bus to broadcast events
-   */
+  // ---- EVENT BUS HOOKS ----
+  // These broadcast events from OTHER sources (SSE, bridges) to WS clients
+  // so WS clients see real-time updates even if the request came from web UI
+
   private setupEventBusHooks(): void {
-    // Agent events
-    eventBus.on("agent:start", (data) => {
-      if (data.sessionId) {
-        this.broadcast(data.sessionId, { type: "session", data: { event: "agent_start" } });
-      }
-    });
-
-    eventBus.on("agent:end", (data) => {
-      if (data.sessionId) {
-        this.broadcast(data.sessionId, { type: "session", data: { event: "agent_end" } });
-      }
-    });
-
-    // Tool events
-    eventBus.on("tool:before_call", (data) => {
-      if (data.sessionId) {
-        this.broadcast(data.sessionId, {
-          type: "tool-call",
-          data: { tool: data.tool, args: data.args },
+    const hooks: Array<[string, (data: any) => void]> = [
+      ["agent:start", (data) => {
+        if (data.sessionId) {
+          this.broadcast(data.sessionId, {
+            type: "session",
+            data: { event: "agent_start", channel: data.channel },
+          });
+        }
+      }],
+      ["agent:end", (data) => {
+        if (data.sessionId) {
+          this.broadcast(data.sessionId, {
+            type: "session",
+            data: { event: "agent_end", toolCount: data.toolCount, textLength: data.textLength },
+          });
+        }
+      }],
+      ["agent:error", (data) => {
+        if (data.sessionId) {
+          this.broadcast(data.sessionId, {
+            type: "error",
+            data: { event: "agent_error", error: data.error },
+          });
+        }
+      }],
+      ["session:created", (data) => {
+        this.broadcastAll({
+          type: "session",
+          data: { event: "session_created", ...data },
         });
-      }
-    });
-
-    eventBus.on("tool:after_call", (data) => {
-      if (data.sessionId) {
-        this.broadcast(data.sessionId, {
-          type: "tool-result",
-          data: { tool: data.tool, result: data.result },
+      }],
+      ["session:deleted", (data) => {
+        this.broadcastAll({
+          type: "session",
+          data: { event: "session_deleted", ...data },
         });
-      }
-    });
+      }],
+      // Workflow events → broadcast to all
+      ["workflow:start", (data) => {
+        this.broadcastAll({
+          type: "session",
+          data: { event: "workflow_start", runId: data.runId, workflowId: data.workflowId },
+        });
+      }],
+      ["workflow:complete", (data) => {
+        this.broadcastAll({
+          type: "session",
+          data: { event: "workflow_complete", runId: data.runId, status: data.status },
+        });
+      }],
+      ["workflow:error", (data) => {
+        this.broadcastAll({
+          type: "session",
+          data: { event: "workflow_error", runId: data.runId, error: data.error },
+        });
+      }],
+      // Sub-agent events
+      ["subagent:spawned", (data) => {
+        this.broadcastAll({
+          type: "session",
+          data: { event: "subagent_spawned", ...data },
+        });
+      }],
+      ["subagent:completed", (data) => {
+        this.broadcastAll({
+          type: "session",
+          data: { event: "subagent_completed", ...data },
+        });
+      }],
+    ];
 
-    // Workflow events — broadcast to all clients (workflows are global)
-    eventBus.on("workflow:start", (data) => {
-      this.broadcastAll({
-        type: "session",
-        data: { event: "workflow_start", runId: data.runId, workflowId: data.workflowId },
-      });
-    });
-
-    eventBus.on("workflow:complete", (data) => {
-      this.broadcastAll({
-        type: "session",
-        data: { event: "workflow_complete", runId: data.runId, workflowId: data.workflowId, status: data.status },
-      });
-    });
-
-    eventBus.on("workflow:error", (data) => {
-      this.broadcastAll({
-        type: "session",
-        data: { event: "workflow_error", runId: data.runId, workflowId: data.workflowId, error: data.error },
-      });
-    });
-
-    eventBus.on("workflow:resume", (data) => {
-      this.broadcastAll({
-        type: "session",
-        data: { event: "workflow_resume", runId: data.runId, workflowId: data.workflowId },
-      });
-    });
-
-    eventBus.on("workflow:updated", (data) => {
-      this.broadcastAll({
-        type: "session",
-        data: { event: "workflow_updated", runId: data.runId, updates: data.updates },
-      });
-    });
+    for (const [event, handler] of hooks) {
+      const unsub = eventBus.on(event as any, handler);
+      this.eventBusUnsubscribers.push(unsub);
+    }
   }
 
-  /**
-   * Generate unique client ID
-   */
   private generateClientId(): string {
     return `ws-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 }
 
-// Singleton instance
+// ============================================
+// SINGLETON + EXPORTS
+// ============================================
+
 export const wsServer = new KaryaWebSocketServer(
   parseInt(process.env.KARYA_WS_PORT || "3002")
 );
 
-// Helper functions
+/** Start the WebSocket server */
 export function startWebSocketServer(): void {
   wsServer.start();
 }
 
+/** Stop the WebSocket server */
 export function stopWebSocketServer(): void {
   wsServer.stop();
 }
 
+/** Broadcast to all clients on a session */
 export function broadcastToSession(sessionId: string, type: WSMessageType, data: any): void {
   wsServer.broadcast(sessionId, { type, data });
 }
 
+/** Stream text delta to session */
 export function broadcastTextDelta(sessionId: string, delta: string): void {
   wsServer.broadcast(sessionId, { type: "text-delta", data: { delta } });
 }
 
-export function broadcastToolCall(sessionId: string, tool: string, args: any): void {
-  wsServer.broadcast(sessionId, { type: "tool-call", data: { tool, args } });
+/** Broadcast tool call to session */
+export function broadcastToolCall(sessionId: string, toolName: string, args: any): void {
+  wsServer.broadcast(sessionId, { type: "tool-call", data: { toolName, args } });
 }
 
-export function broadcastToolResult(sessionId: string, tool: string, result: any): void {
-  wsServer.broadcast(sessionId, { type: "tool-result", data: { tool, result } });
+/** Broadcast tool result to session */
+export function broadcastToolResult(sessionId: string, toolName: string, result: any): void {
+  wsServer.broadcast(sessionId, { type: "tool-result", data: { toolName, result } });
 }
