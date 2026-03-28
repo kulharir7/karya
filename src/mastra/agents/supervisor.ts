@@ -47,10 +47,31 @@ const memory = new Memory({
     lastMessages: 20,
 
     // Working Memory — persistent scratchpad for user info
-    // Agent stores names, preferences, goals across conversations
+    // Agent reads this EVERY turn, updates when it learns something new
+    // Persists across ALL conversation threads for same user
     workingMemory: {
       enabled: true,
       scope: "resource",
+      template: `# User Profile
+- **Name**: 
+- **Language**: 
+- **Timezone**: 
+
+# Preferences
+- **Response style**: 
+- **Favorite tools**: 
+- **Projects working on**: 
+
+# Important Context
+- **Current task**: 
+- **Key decisions made**: 
+- **Things to remember**: 
+
+# Technical Details
+- **OS**: 
+- **Common directories**: 
+- **Git repos**: 
+`,
     },
 
     // Semantic Recall — RAG search for relevant past messages
