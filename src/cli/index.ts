@@ -3,345 +3,604 @@
  * Karya CLI — Command-line interface for Karya AI Agent
  * 
  * Usage:
- *   karya chat "what's my system info?"     — One-shot chat
- *   karya run "organize my downloads"       — Run task and exit
- *   karya serve                             — Start server (daemon mode)
- *   karya status                            — Check server status
- *   karya tools                             — List all tools
- *   karya sessions                          — List sessions
- *   karya mcp list                          — List MCP servers
- *   karya help                              — Show help
+ *   karya                                    — Interactive REPL (default)
+ *   karya -i                                 — Interactive REPL (explicit)
+ *   karya chat "what's my system info?"      — One-shot chat
+ *   karya run "organize my downloads"        — Run task and exit
+ *   karya tool <id> [--args '{}']            — Execute a tool directly
+ *   karya serve [-p 3000]                    — Start server
+ *   karya status                             — Server health + stats
+ *   karya sessions                           — List sessions
+ *   karya sessions delete <id>               — Delete a session
+ *   karya tools [category]                   — List tools (dynamic from API)
+ *   karya tools search <query>               — Search tools
+ *   karya agents                             — List agents
+ *   karya tasks                              — List scheduled tasks
+ *   karya workflows                          — List workflow templates
+ *   karya mcp list                           — MCP servers
+ *   karya memory search <query>              — Search memory
+ *   karya token create <name>                — Generate API token
+ *   karya token list                         — List tokens
+ *   karya config                             — Show config
+ *   karya config set <key> <value>           — Update config
+ *   karya help                               — Show help
  */
 
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
+import { spawn } from "child_process";
+import {
+  setConfig,
+  getConfig,
+  isServerReachable,
+  streamChat,
+  listSessions,
+  deleteSession,
+  listTools,
+  listToolsByCategory,
+  searchTools,
+  runTool,
+  listAgents,
+  listTasks,
+  listWorkflows,
+  listMCPServers,
+  searchMemory,
+  getDailyLog,
+  getStatus,
+  getHealth,
+  createToken,
+  listTokens,
+  type StreamEvents,
+} from "./api-client.js";
+import {
+  LOGO,
+  header,
+  printStatus,
+  printSessions,
+  printTools,
+  printAgents,
+  printTasks,
+  printWorkflows,
+  printMCPServers,
+  printToolCall,
+  printToolResult,
+  printStreamDone,
+  printStreamError,
+  resetStreamDisplay,
+} from "./formatters.js";
+import { startREPL } from "./repl.js";
 
-const API_URL = process.env.KARYA_API_URL || "http://localhost:3000";
-const VERSION = "0.1.0";
+const VERSION = "0.5.0";
 
 const program = new Command();
 
-// ASCII Art Logo
-const logo = `
-${chalk.magenta("╔═══════════════════════════════════╗")}
-${chalk.magenta("║")}  ${chalk.bold.white("⚡ KARYA")} ${chalk.gray("— AI Computer Agent")}   ${chalk.magenta("║")}
-${chalk.magenta("╚═══════════════════════════════════╝")}
-`;
+// ============================================
+// GLOBAL OPTIONS
+// ============================================
 
-/**
- * Make API request
- */
-async function apiRequest(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<any> {
-  const url = `${API_URL}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`);
-  }
-
-  return response.json();
-}
-
-/**
- * Stream chat response (SSE)
- */
-async function streamChat(message: string, sessionId: string = "cli-session"): Promise<void> {
-  const spinner = ora("Thinking...").start();
-  
-  try {
-    // AbortController for timeout (2 minutes)
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
-    
-    const response = await fetch(`${API_URL}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, sessionId }),
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      spinner.fail("Request failed");
-      console.error(chalk.red(`Error: ${response.status} ${response.statusText}`));
-      return;
-    }
-
-    spinner.stop();
-    
-    const reader = response.body?.getReader();
-    if (!reader) {
-      console.error(chalk.red("No response stream"));
-      return;
-    }
-
-    const decoder = new TextDecoder();
-    let fullText = "";
-    let toolsShown = false;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split("\n");
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        
-        const data = line.slice(6);
-        if (data === "[DONE]") continue;
-
-        try {
-          const parsed = JSON.parse(data);
-
-          if (parsed.type === "text-delta" && parsed.delta) {
-            process.stdout.write(chalk.white(parsed.delta));
-            fullText += parsed.delta;
-          } else if (parsed.type === "tool-call" && !toolsShown) {
-            console.log(chalk.yellow(`\n🔧 Using: ${parsed.tool}`));
-            toolsShown = true;
-          } else if (parsed.type === "text" && parsed.text && !fullText) {
-            console.log(chalk.white(parsed.text));
-          }
-        } catch {
-          // Ignore parse errors
-        }
-      }
-    }
-
-    console.log(); // Newline at end
-  } catch (err: any) {
-    spinner.fail("Error");
-    console.error(chalk.red(err.message));
-  }
-}
-
-// Setup CLI
 program
   .name("karya")
-  .description("Karya — AI Computer Agent CLI")
-  .version(VERSION);
+  .description("⚡ Karya — AI Computer Agent CLI")
+  .version(VERSION)
+  .option("-u, --url <url>", "Server URL", process.env.KARYA_API_URL || "http://localhost:3000")
+  .option("-t, --token <token>", "API token", process.env.KARYA_TOKEN || "")
+  .option("-s, --session <id>", "Session ID", process.env.KARYA_SESSION || "cli-default")
+  .option("-i, --interactive", "Start interactive REPL")
+  .hook("preAction", (thisCommand) => {
+    const opts = thisCommand.opts();
+    setConfig({
+      apiUrl: opts.url,
+      token: opts.token,
+      sessionId: opts.session,
+    });
+  });
 
-// Chat command
+// ============================================
+// CHAT — One-shot message
+// ============================================
+
 program
   .command("chat <message>")
   .description("Send a message to Karya (one-shot)")
-  .option("-s, --session <id>", "Session ID", "cli-session")
-  .action(async (message: string, options: { session: string }) => {
-    console.log(logo);
-    console.log(chalk.gray(`> ${message}\n`));
-    await streamChat(message, options.session);
+  .action(async (message: string) => {
+    console.log(LOGO);
+    console.log(chalk.gray(`  > ${message}\n`));
+    await oneShot(message);
   });
 
-// Run command (alias for chat)
+// ============================================
+// RUN — Alias for chat (task-oriented wording)
+// ============================================
+
 program
   .command("run <task>")
   .description("Run a task and exit")
-  .option("-s, --session <id>", "Session ID", "cli-task")
-  .action(async (task: string, options: { session: string }) => {
-    console.log(logo);
-    console.log(chalk.gray(`> Task: ${task}\n`));
-    await streamChat(task, options.session);
+  .action(async (task: string) => {
+    console.log(LOGO);
+    console.log(chalk.gray(`  > Task: ${task}\n`));
+    await oneShot(task);
   });
 
-// Status command
-program
-  .command("status")
-  .description("Check Karya server status")
-  .action(async () => {
-    const spinner = ora("Checking server...").start();
-    
-    try {
-      const [wsStatus, sessionCount] = await Promise.all([
-        apiRequest("/api/ws"),
-        apiRequest("/api/sessions").then(r => r.sessions?.length || 0),
-      ]);
+// ============================================
+// TOOL — Execute a specific tool
+// ============================================
 
-      spinner.stop();
-      console.log(logo);
-      console.log(chalk.green("✓ Server is running\n"));
-      console.log(chalk.white("  API:        ") + chalk.cyan(API_URL));
-      console.log(chalk.white("  WebSocket:  ") + chalk.cyan(wsStatus.url));
-      console.log(chalk.white("  WS Clients: ") + chalk.yellow(wsStatus.clients));
-      console.log(chalk.white("  Sessions:   ") + chalk.yellow(sessionCount));
-    } catch (err: any) {
-      spinner.fail("Server not reachable");
-      console.error(chalk.red(`\nCannot connect to ${API_URL}`));
-      console.log(chalk.gray("Run 'karya serve' to start the server"));
-    }
-  });
-
-// Tools command
 program
-  .command("tools")
-  .description("List all available tools")
-  .action(async () => {
-    const spinner = ora("Fetching tools...").start();
+  .command("tool <id>")
+  .description("Execute a tool directly")
+  .option("-a, --args <json>", "Tool arguments as JSON", "{}")
+  .action(async (id: string, opts: { args: string }) => {
+    console.log(LOGO);
+    const spinner = ora({ text: `Running ${id}...`, indent: 2 }).start();
 
     try {
-      // Fetch from help page data or hardcoded list
-      spinner.stop();
-      console.log(logo);
-      
-      // Hardcoded tool list (matches actual tools in Karya)
-      const toolCategories: Record<string, string[]> = {
-        "BROWSER": [
-          "browser-navigate", "browser-act", "browser-extract", 
-          "browser-screenshot", "web-search", "browser-agent"
-        ],
-        "FILES": [
-          "file-read", "file-write", "file-list", "file-move", "file-search",
-          "file-read-pdf", "file-resize-image", "file-zip", "file-unzip", 
-          "file-batch-rename", "file-size-info"
-        ],
-        "SHELL": ["shell-execute"],
-        "SYSTEM": [
-          "system-info", "system-datetime", "system-processes", "system-open-app",
-          "system-kill-process", "clipboard-read", "clipboard-write", 
-          "system-notify", "system-screenshot", "analyze-image"
-        ],
-        "CODE": ["code-write", "code-execute", "code-analyze"],
-        "DATA": ["api-call", "data-csv-parse", "data-json-query", "data-transform"],
-        "MEMORY": [
-          "memory-search", "memory-read", "memory-write", 
-          "memory-log", "memory-list", "memory-recall"
-        ],
-        "GIT": ["git-status", "git-commit", "git-push", "git-log", "git-diff"],
-        "SCHEDULER": ["task-schedule", "task-list", "task-cancel"],
-        "SKILLS": ["skill-list", "skill-match", "skill-load", "skill-create"],
-        "WORKFLOWS": [
-          "workflow-list", "workflow-run", "workflow-status",
-          "workflow-history", "workflow-resume", "workflow-cancel", "workflow-stats"
-        ],
-        "AGENTS": [
-          "delegate-browser-agent", "delegate-file-agent", "delegate-coder-agent",
-          "delegate-researcher-agent", "delegate-data-analyst-agent"
-        ],
-      };
-      
-      const totalTools = Object.values(toolCategories).flat().length;
-      console.log(chalk.bold(`\n📦 ${totalTools} Tools Available\n`));
-
-      for (const [cat, toolList] of Object.entries(toolCategories)) {
-        console.log(chalk.yellow(`\n${cat} (${toolList.length})`));
-        for (const t of toolList) {
-          console.log(chalk.gray(`  • ${t}`));
-        }
+      let args = {};
+      try {
+        args = JSON.parse(opts.args);
+      } catch {
+        spinner.fail("Invalid JSON for --args");
+        return;
       }
-    } catch (err: any) {
-      spinner.fail("Error");
-      console.error(chalk.red(err.message));
-    }
-  });
 
-// Sessions command
-program
-  .command("sessions")
-  .description("List all sessions")
-  .action(async () => {
-    const spinner = ora("Fetching sessions...").start();
-
-    try {
-      const data = await apiRequest("/api/sessions");
+      const result = await runTool(id, args);
       spinner.stop();
 
-      console.log(logo);
-      const sessions = data.sessions || [];
-      console.log(chalk.bold(`\n💬 ${sessions.length} Sessions\n`));
-
-      for (const session of sessions) {
-        const date = new Date(session.updatedAt || session.createdAt);
-        console.log(
-          chalk.cyan(`  ${session.id}`) +
-          chalk.gray(` — ${session.name || "Untitled"}`) +
-          chalk.gray(` (${date.toLocaleDateString()})`)
-        );
+      header(`🔧 ${id}`);
+      if (result.result) {
+        console.log(chalk.white(`  ${result.result}`));
       }
-
-      if (sessions.length === 0) {
-        console.log(chalk.gray("  No sessions yet"));
+      if (result.toolCalls?.length) {
+        for (const tc of result.toolCalls) {
+          console.log(chalk.yellow(`  Tool: ${tc.toolName}`));
+          if (tc.result) {
+            console.log(chalk.gray(`  Result: ${JSON.stringify(tc.result).slice(0, 200)}`));
+          }
+        }
       }
+      console.log(chalk.gray(`\n  ⏱️  ${result.durationMs}ms`));
     } catch (err: any) {
-      spinner.fail("Error");
-      console.error(chalk.red(err.message));
+      spinner.fail(err.message);
     }
   });
 
-// MCP command
-program
-  .command("mcp <action>")
-  .description("MCP server management (list, test)")
-  .action(async (action: string) => {
-    const spinner = ora("Fetching MCP servers...").start();
+// ============================================
+// SERVE — Start server
+// ============================================
 
-    try {
-      if (action === "list") {
-        const data = await apiRequest("/api/mcp?action=list");
-        spinner.stop();
-
-        console.log(logo);
-        const servers = data.servers || [];
-        console.log(chalk.bold(`\n🔌 ${servers.length} MCP Servers\n`));
-
-        for (const server of servers) {
-          const status = server.enabled ? chalk.green("●") : chalk.gray("○");
-          console.log(`  ${status} ${chalk.cyan(server.name)} — ${chalk.gray(server.url)}`);
-        }
-
-        if (servers.length === 0) {
-          console.log(chalk.gray("  No MCP servers configured"));
-        }
-      } else {
-        spinner.stop();
-        console.log(chalk.yellow(`Unknown action: ${action}`));
-        console.log(chalk.gray("Available: list"));
-      }
-    } catch (err: any) {
-      spinner.fail("Error");
-      console.error(chalk.red(err.message));
-    }
-  });
-
-// Serve command (placeholder — actual server is Next.js)
 program
   .command("serve")
   .description("Start Karya server")
   .option("-p, --port <port>", "Port number", "3000")
-  .action((options: { port: string }) => {
-    console.log(logo);
-    console.log(chalk.yellow("Starting Karya server...\n"));
-    console.log(chalk.gray("Run this in the karya directory:"));
-    console.log(chalk.cyan(`  npm run dev -- -p ${options.port}\n`));
-    console.log(chalk.gray("Or for production:"));
-    console.log(chalk.cyan("  npm run build && npm start"));
+  .action((opts: { port: string }) => {
+    console.log(LOGO);
+    console.log(chalk.yellow("  Starting Karya server...\n"));
+
+    const child = spawn("npx", ["next", "dev", "--port", opts.port], {
+      cwd: process.env.KARYA_DIR || process.cwd(),
+      stdio: "inherit",
+      shell: true,
+    });
+
+    child.on("error", (err) => {
+      console.error(chalk.red(`  Failed to start: ${err.message}`));
+      console.log(chalk.gray("  Make sure you're in the karya directory, or set KARYA_DIR"));
+    });
+
+    child.on("exit", (code) => {
+      process.exit(code || 0);
+    });
+
+    // Forward Ctrl+C
+    process.on("SIGINT", () => {
+      child.kill("SIGINT");
+    });
   });
 
-// Help (default)
+// ============================================
+// STATUS
+// ============================================
+
 program
-  .command("help")
-  .description("Show help")
-  .action(() => {
-    console.log(logo);
-    program.outputHelp();
+  .command("status")
+  .description("Server health and system status")
+  .action(async () => {
+    console.log(LOGO);
+    const spinner = ora({ text: "Checking server...", indent: 2 }).start();
+
+    try {
+      const reachable = await isServerReachable();
+      if (!reachable) {
+        spinner.fail("Server not reachable");
+        console.log(chalk.red(`\n  Cannot connect to ${getConfig().apiUrl}`));
+        console.log(chalk.gray("  Start the server: karya serve"));
+        return;
+      }
+
+      const status = await getStatus();
+      spinner.stop();
+      printStatus(status);
+    } catch (err: any) {
+      spinner.fail(err.message);
+    }
   });
+
+// ============================================
+// SESSIONS
+// ============================================
+
+const sessionsCmd = program
+  .command("sessions")
+  .description("List all sessions");
+
+sessionsCmd.action(async () => {
+  console.log(LOGO);
+  const spinner = ora({ text: "Fetching sessions...", indent: 2 }).start();
+  try {
+    const sessions = await listSessions();
+    spinner.stop();
+    header("💬 Sessions");
+    printSessions(sessions);
+  } catch (err: any) {
+    spinner.fail(err.message);
+  }
+});
+
+sessionsCmd
+  .command("delete <id>")
+  .description("Delete a session")
+  .action(async (id: string) => {
+    try {
+      await deleteSession(id);
+      console.log(chalk.green(`  ✓ Deleted: ${id}`));
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+// ============================================
+// TOOLS
+// ============================================
+
+const toolsCmd = program
+  .command("tools [category]")
+  .description("List all tools or by category");
+
+toolsCmd.action(async (category?: string) => {
+  console.log(LOGO);
+  const spinner = ora({ text: "Fetching tools...", indent: 2 }).start();
+
+  try {
+    if (category) {
+      const data = await listToolsByCategory(category);
+      spinner.stop();
+      header(`🔧 Tools — ${category}`);
+      if (data.tools?.length) {
+        for (const t of data.tools) {
+          console.log(`  ${chalk.gray("•")} ${chalk.white(t)}`);
+        }
+        console.log(chalk.gray(`\n  ${data.count} tools`));
+      } else {
+        console.log(chalk.gray("  No tools in this category"));
+      }
+    } else {
+      const data = await listTools();
+      spinner.stop();
+      header("🔧 Tools");
+      printTools(data);
+    }
+  } catch (err: any) {
+    spinner.fail(err.message);
+  }
+});
+
+toolsCmd
+  .command("search <query>")
+  .description("Search tools by name")
+  .action(async (query: string) => {
+    try {
+      const data = await searchTools(query);
+      header(`🔍 Tools matching "${query}"`);
+      if (data.tools?.length) {
+        for (const t of data.tools) {
+          console.log(`  ${chalk.gray("•")} ${chalk.white(t)}`);
+        }
+        console.log(chalk.gray(`\n  ${data.count} results`));
+      } else {
+        console.log(chalk.gray("  No tools found"));
+      }
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+// ============================================
+// AGENTS
+// ============================================
+
+program
+  .command("agents")
+  .description("List all agents")
+  .action(async () => {
+    console.log(LOGO);
+    try {
+      const data = await listAgents();
+      header("🤖 Agents");
+      printAgents(data.agents || []);
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+// ============================================
+// TASKS
+// ============================================
+
+program
+  .command("tasks")
+  .description("List scheduled tasks")
+  .action(async () => {
+    console.log(LOGO);
+    try {
+      const data = await listTasks();
+      header("📋 Scheduled Tasks");
+      printTasks(data.tasks || []);
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+// ============================================
+// WORKFLOWS
+// ============================================
+
+program
+  .command("workflows")
+  .description("List workflow templates")
+  .action(async () => {
+    console.log(LOGO);
+    try {
+      const data = await listWorkflows();
+      header("⚙️ Workflow Templates");
+      printWorkflows(data.templates || []);
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+// ============================================
+// MCP
+// ============================================
+
+const mcpCmd = program
+  .command("mcp")
+  .description("MCP server management");
+
+mcpCmd
+  .command("list")
+  .description("List MCP servers")
+  .action(async () => {
+    console.log(LOGO);
+    try {
+      const data = await listMCPServers();
+      header("🔌 MCP Servers");
+      printMCPServers(data.servers || []);
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+// Default mcp → list
+mcpCmd.action(async () => {
+  console.log(LOGO);
+  try {
+    const data = await listMCPServers();
+    header("🔌 MCP Servers");
+    printMCPServers(data.servers || []);
+  } catch (err: any) {
+    console.log(chalk.red(`  ❌ ${err.message}`));
+  }
+});
+
+// ============================================
+// MEMORY
+// ============================================
+
+const memoryCmd = program
+  .command("memory")
+  .description("Memory operations");
+
+memoryCmd
+  .command("search <query>")
+  .description("Search memory files")
+  .action(async (query: string) => {
+    console.log(LOGO);
+    try {
+      const data = await searchMemory(query);
+      header(`🧠 Memory — "${query}"`);
+      const results = data.results || [];
+      if (results.length === 0) {
+        console.log(chalk.gray("  No results found"));
+      } else {
+        for (const r of results) {
+          console.log(`  ${chalk.cyan(r.file || "?")} ${chalk.gray(`(score: ${r.score || "?"})`)}`);
+          if (r.snippet) {
+            console.log(`    ${chalk.white(r.snippet.slice(0, 200))}`);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+memoryCmd
+  .command("today")
+  .description("Show today's daily log")
+  .action(async () => {
+    console.log(LOGO);
+    try {
+      const data = await getDailyLog();
+      header(`📝 Daily Log — ${data.date}`);
+      if (data.content) {
+        console.log(chalk.white(`  ${data.content.slice(0, 2000)}`));
+      } else {
+        console.log(chalk.gray("  No entries today"));
+      }
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+// ============================================
+// TOKEN
+// ============================================
+
+const tokenCmd = program
+  .command("token")
+  .description("API token management");
+
+tokenCmd
+  .command("create <name>")
+  .description("Generate a new API token")
+  .option("--scopes <scopes>", "Comma-separated scopes", "*")
+  .action(async (name: string, opts: { scopes: string }) => {
+    console.log(LOGO);
+    try {
+      const scopes = opts.scopes.split(",").map((s: string) => s.trim());
+      const result = await createToken(name, scopes);
+
+      header("🔑 New API Token");
+      console.log(chalk.bold.yellow(`\n  ${result.token}\n`));
+      console.log(chalk.red("  ⚠️  Save this now — it won't be shown again!\n"));
+      console.log(`  ${chalk.gray("Name:")}   ${result.name}`);
+      console.log(`  ${chalk.gray("Scopes:")} ${result.scopes?.join(", ") || "*"}`);
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+tokenCmd
+  .command("list")
+  .description("List API tokens")
+  .action(async () => {
+    console.log(LOGO);
+    try {
+      const data = await listTokens();
+      header("🔑 API Tokens");
+      const tokens = data.tokens || [];
+      if (tokens.length === 0) {
+        console.log(chalk.gray("  No tokens. Create one: karya token create <name>"));
+      } else {
+        for (const t of tokens) {
+          console.log(`  ${chalk.cyan(t.name)} — ${chalk.gray(t.tokenPreview)}`);
+          console.log(`    ${chalk.gray(`Scopes: ${t.scopes?.join(", ")}`)} · ${chalk.gray(`Used: ${t.requestCount}x`)}`);
+        }
+      }
+    } catch (err: any) {
+      console.log(chalk.red(`  ❌ ${err.message}`));
+    }
+  });
+
+// ============================================
+// CONFIG
+// ============================================
+
+const configCmd = program
+  .command("config")
+  .description("Show or set CLI config");
+
+configCmd.action(() => {
+  console.log(LOGO);
+  const cfg = getConfig();
+  header("⚙️ CLI Config");
+  console.log(`  ${chalk.white("API URL:")}  ${chalk.cyan(cfg.apiUrl)}`);
+  console.log(`  ${chalk.white("Token:")}    ${cfg.token ? chalk.green(cfg.token.slice(0, 10) + "***") : chalk.gray("none")}`);
+  console.log(`  ${chalk.white("Session:")}  ${chalk.cyan(cfg.sessionId)}`);
+  console.log();
+  console.log(chalk.gray("  Environment variables:"));
+  console.log(chalk.gray("    KARYA_API_URL  — Server URL"));
+  console.log(chalk.gray("    KARYA_TOKEN    — API token"));
+  console.log(chalk.gray("    KARYA_SESSION  — Default session ID"));
+  console.log(chalk.gray("    KARYA_DIR      — Server directory (for 'karya serve')"));
+});
+
+configCmd
+  .command("set <key> <value>")
+  .description("Set a config value (url, token, session)")
+  .action((key: string, value: string) => {
+    const keyMap: Record<string, keyof ReturnType<typeof getConfig>> = {
+      url: "apiUrl",
+      "api-url": "apiUrl",
+      token: "token",
+      session: "sessionId",
+    };
+
+    const configKey = keyMap[key];
+    if (!configKey) {
+      console.log(chalk.yellow(`  Unknown key: ${key}`));
+      console.log(chalk.gray(`  Available: ${Object.keys(keyMap).join(", ")}`));
+      return;
+    }
+
+    setConfig({ [configKey]: value });
+    console.log(chalk.green(`  ✓ ${key} = ${value}`));
+  });
+
+// ============================================
+// ONE-SHOT CHAT HELPER
+// ============================================
+
+async function oneShot(message: string): Promise<void> {
+  const spinner = ora({ text: chalk.gray("Thinking..."), spinner: "dots", indent: 2 }).start();
+  let firstDelta = true;
+  resetStreamDisplay();
+
+  const events: StreamEvents = {
+    onTextDelta: (delta) => {
+      if (firstDelta) {
+        spinner.stop();
+        process.stdout.write("  ");
+        firstDelta = false;
+      }
+      process.stdout.write(chalk.white(delta.replace(/\n/g, "\n  ")));
+    },
+    onToolCall: (toolName) => {
+      if (firstDelta) { spinner.stop(); firstDelta = false; }
+      printToolCall(toolName);
+    },
+    onToolResult: (toolName) => {
+      printToolResult(toolName);
+    },
+    onDone: (info) => {
+      if (firstDelta) spinner.stop();
+      printStreamDone(info);
+    },
+    onError: (error) => {
+      spinner.stop();
+      printStreamError(error);
+    },
+  };
+
+  try {
+    const cfg = getConfig();
+    await streamChat(message, cfg.sessionId, events);
+  } catch (err: any) {
+    spinner.fail(err.message);
+  }
+}
+
+// ============================================
+// PARSE & DEFAULT BEHAVIOR
+// ============================================
 
 // Parse arguments
 program.parse();
 
-// Show help if no command
-if (!process.argv.slice(2).length) {
-  console.log(logo);
-  program.outputHelp();
+// If no command given → interactive REPL
+const userArgs = process.argv.slice(2);
+const opts = program.opts();
+
+if (userArgs.length === 0 || opts.interactive) {
+  startREPL(opts.session);
 }
