@@ -18,25 +18,50 @@ initWorkspace();
 // MASTRA MEMORY (proper, all features)
 // ============================================
 
+// Determine which memory features are available based on API keys
+const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+const hasGoogleKey = !!process.env.GOOGLE_API_KEY;
+const hasOllamaCloud = !!process.env.LLM_API_KEY && process.env.LLM_BASE_URL;
+
+// Pick OM model: Google > Ollama Cloud > disabled
+const omModel = hasGoogleKey
+  ? "google/gemini-2.5-flash"
+  : hasOllamaCloud
+  ? `custom/${process.env.LLM_MODEL || "qwen3-coder:480b"}`
+  : null;
+
 const memory = new Memory({
   options: {
     // Message history — keep last 20 messages in context
     lastMessages: 20,
 
     // Working Memory — persistent scratchpad for user info
-    // Agent can store names, preferences, goals across conversations
     workingMemory: {
       enabled: true,
-      scope: "resource", // Persists across all threads for same user
+      scope: "resource",
     },
 
-    // Semantic Recall — RAG-based search for relevant past messages
-    // Disabled by default (needs vector embeddings), enable with embedder
-    semanticRecall: false,
+    // Semantic Recall — RAG search for relevant past messages
+    // Enabled when OpenAI key available (for embeddings)
+    semanticRecall: hasOpenAIKey
+      ? { topK: 5, messageRange: 2 }
+      : false,
+
+    // Observational Memory — background agents compress old context
+    // Needs a separate LLM to observe + reflect
+    observationalMemory: omModel
+      ? { model: omModel }
+      : false,
   },
 });
 
-logger.info("supervisor", "Memory initialized: history(20) + workingMemory + semanticRecall(off)");
+const features = [
+  "history(20)",
+  "workingMemory",
+  hasOpenAIKey ? "semanticRecall" : "semanticRecall(off-no-key)",
+  omModel ? `observationalMemory(${omModel})` : "observationalMemory(off-no-key)",
+];
+logger.info("supervisor", `Memory: ${features.join(" + ")}`);
 
 // Import ALL tools from all categories
 import { navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool } from "../tools/browser";
