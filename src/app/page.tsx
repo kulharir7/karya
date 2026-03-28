@@ -31,7 +31,8 @@ export default function Home() {
   // ---- Chat hook (replaces all SSE logic) ----
   const {
     messages, streamingText, streamingTools, isLoading, activeAgent,
-    sendMessage, cancelRequest, loadMessages, clearMessages,
+    pendingApproval, sendMessage, cancelRequest, approveToolCall, declineToolCall,
+    loadMessages, clearMessages,
   } = useChat({
     sessionId: activeId,
     onSessionChange: (newId) => {
@@ -165,7 +166,8 @@ export default function Home() {
 
         <ChatContainer
           messages={messages} streamingText={streamingText} streamingTools={streamingTools}
-          isLoading={isLoading} activeAgent={activeAgent} onQuickSend={handleSend}
+          isLoading={isLoading} activeAgent={activeAgent} pendingApproval={pendingApproval}
+          onQuickSend={handleSend} onApprove={approveToolCall} onDecline={declineToolCall}
         />
 
         <ChatInput isLoading={isLoading} onSend={handleSend} onCancel={cancelRequest} />

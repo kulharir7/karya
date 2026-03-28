@@ -28,6 +28,12 @@ export interface AgentInfo {
   reason: string;
 }
 
+export interface PendingApproval {
+  toolName: string;
+  args: any;
+  toolCallId: string;
+}
+
 export interface ImageAttachment {
   base64: string;
   mimeType: string;
@@ -52,6 +58,7 @@ export function useChat(opts: {
   const [streamingTools, setStreamingTools] = useState<ToolCall[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeAgent, setActiveAgent] = useState<AgentInfo | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // ---- Load messages from server ----
@@ -148,10 +155,14 @@ export function useChat(opts: {
                 tools.push({ toolName: d.toolName, args: d.args, status: "running" });
                 setStreamingTools([...tools]);
               } else if (d.type === "tool-approval") {
-                // Tool requires approval — show as "pending" in UI
+                // Tool requires approval — show dialog
+                setPendingApproval({
+                  toolName: d.toolName,
+                  args: d.args,
+                  toolCallId: d.toolCallId || "",
+                });
                 tools.push({ toolName: d.toolName, args: d.args, status: "running" });
                 setStreamingTools([...tools]);
-                // TODO: Show approval dialog, send approve/decline response
               } else if (d.type === "tool-result") {
                 const i = tools.findIndex((t) => t.toolName === d.toolName && t.status === "running");
                 if (i !== -1) {
@@ -206,6 +217,17 @@ export function useChat(opts: {
     [isLoading, sessionId, apiUrl, onSessionChange, onSessionsReload]
   );
 
+  // ---- Approve/Decline tool ----
+  const approveToolCall = useCallback(() => {
+    setPendingApproval(null);
+    // TODO: Send approve signal to agent when Mastra supports it via SSE
+  }, []);
+
+  const declineToolCall = useCallback(() => {
+    setPendingApproval(null);
+    // TODO: Send decline signal to agent
+  }, []);
+
   // ---- Cancel ----
   const cancelRequest = useCallback(() => {
     if (abortRef.current) {
@@ -229,8 +251,11 @@ export function useChat(opts: {
     streamingTools,
     isLoading,
     activeAgent,
+    pendingApproval,
     sendMessage,
     cancelRequest,
+    approveToolCall,
+    declineToolCall,
     loadMessages,
     clearMessages,
   };

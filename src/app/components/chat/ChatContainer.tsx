@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import type { ChatMessage as ChatMessageType, ToolCall, AgentInfo } from "@/app/hooks/useChat";
+import type { ChatMessage as ChatMessageType, ToolCall, AgentInfo, PendingApproval } from "@/app/hooks/useChat";
 import ChatMessage from "./ChatMessage";
 import ToolChips from "./ToolChip";
 import MessageContent from "@/app/components/MessageContent";
 import ThinkingIndicator from "./ThinkingIndicator";
 import WelcomeScreen from "./WelcomeScreen";
+import ApprovalDialog from "./ApprovalDialog";
 
 interface ChatContainerProps {
   messages: ChatMessageType[];
@@ -14,11 +15,15 @@ interface ChatContainerProps {
   streamingTools: ToolCall[];
   isLoading: boolean;
   activeAgent: AgentInfo | null;
+  pendingApproval: PendingApproval | null;
   onQuickSend: (text: string) => void;
+  onApprove: () => void;
+  onDecline: () => void;
 }
 
 export default function ChatContainer({
-  messages, streamingText, streamingTools, isLoading, activeAgent, onQuickSend,
+  messages, streamingText, streamingTools, isLoading, activeAgent,
+  pendingApproval, onQuickSend, onApprove, onDecline,
 }: ChatContainerProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,8 +91,19 @@ export default function ChatContainer({
                   </div>
                 )}
 
+                {/* Approval dialog */}
+                {pendingApproval && (
+                  <ApprovalDialog
+                    toolName={pendingApproval.toolName}
+                    args={pendingApproval.args}
+                    toolCallId={pendingApproval.toolCallId}
+                    onApprove={onApprove}
+                    onDecline={onDecline}
+                  />
+                )}
+
                 {/* Thinking indicator (no text yet, no tools yet) */}
-                {isLoading && !streamingText && streamingTools.length === 0 && (
+                {isLoading && !streamingText && streamingTools.length === 0 && !pendingApproval && (
                   <ThinkingIndicator agent={activeAgent} currentTool={streamingTools[streamingTools.length - 1]?.toolName} />
                 )}
               </div>
