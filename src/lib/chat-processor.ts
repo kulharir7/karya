@@ -494,14 +494,6 @@ export async function processChat(
   try {
     const streamOptions: any = {
       maxSteps,
-      // Mastra Memory — thread + resource for message persistence
-      memory: {
-        thread: {
-          id: sessionId,
-          title: message.slice(0, 50),
-        },
-        resource: channel === "telegram" ? `tg-${sessionId}` : "karya-user",
-      },
     };
     if (mcpToolCount > 0) {
       streamOptions.toolsets = mcpToolsets;

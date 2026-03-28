@@ -74,18 +74,11 @@ const memory = new Memory({
 `,
     },
 
-    // Semantic Recall — RAG search for relevant past messages
-    // Uses same provider for embeddings if available
-    semanticRecall: (hasLLMKey || hasOpenAIKey)
-      ? { topK: 5, messageRange: 2 }
-      : false,
+    // Semantic Recall — disabled for now (needs proper embedder setup)
+    semanticRecall: false,
 
-    // Observational Memory — background agents compress old context
-    // Observer watches conversations → creates dense observation log
-    // Reflector condenses observations when they grow too large
-    observationalMemory: omModel
-      ? { model: omModel as any }
-      : false,
+    // Observational Memory — disabled for now (needs stable model instance)
+    observationalMemory: false,
   },
 });
 
