@@ -98,6 +98,8 @@ export default function SettingsPage() {
   const [authProviders, setAuthProviders] = useState<any[]>([]);
   const [authProfiles, setAuthProfiles] = useState<any[]>([]);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const [authKeyInput, setAuthKeyInput] = useState<string>("");
+  const [authKeyProvider, setAuthKeyProvider] = useState<string | null>(null);
   
   // Security state
   const [securityConfig, setSecurityConfig] = useState<any>(null);
@@ -872,8 +874,8 @@ export default function SettingsPage() {
                             )}
                             <button
                               onClick={() => {
-                                setShowAuthModal(provider.id);
-                                setApiKeyInput("");
+                                setAuthKeyProvider(authKeyProvider === provider.id ? null : provider.id);
+                                setAuthKeyInput("");
                               }}
                               className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-all"
                             >
@@ -883,6 +885,53 @@ export default function SettingsPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* Inline API Key Input */}
+                    {authKeyProvider === provider.id && (
+                      <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="password"
+                            value={authKeyInput}
+                            onChange={(e) => setAuthKeyInput(e.target.value)}
+                            placeholder={`Paste your ${provider.name.split(" ")[0]} API key...`}
+                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
+                          />
+                          <button
+                            onClick={async () => {
+                              if (authKeyInput.trim()) {
+                                await addAuthKey(provider.id, authKeyInput.trim());
+                                setAuthKeyProvider(null);
+                                setAuthKeyInput("");
+                              }
+                            }}
+                            disabled={!authKeyInput.trim() || oauthLoading === provider.id}
+                            className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {oauthLoading === provider.id ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setAuthKeyProvider(null);
+                              setAuthKeyInput("");
+                            }}
+                            className="px-3 py-2 text-gray-500 hover:text-gray-700"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        {provider.consoleUrl && (
+                          <a 
+                            href={provider.consoleUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800"
+                          >
+                            🔗 Get API key from {provider.name.split(" ")[0]} Console →
+                          </a>
+                        )}
+                      </div>
+                    )}
 
                     {/* Instructions (collapsed) */}
                     {!provider.configured && provider.instructions && (

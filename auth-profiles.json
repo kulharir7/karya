@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "profiles": {
+    "openai:api-key": {
+      "id": "openai:api-key",
+      "provider": "openai",
+      "accessToken": "sk-test-1234567890abcdef",
+      "createdAt": 1774719781755,
+      "type": "api-key"
+    },
+    "openrouter:api-key": {
+      "id": "openrouter:api-key",
+      "provider": "openrouter",
+      "accessToken": "sk-or-test-key-123456789",
+      "createdAt": 1774719948779,
+      "type": "api-key"
+    }
+  },
+  "activeProfile": {
+    "openai": "openai:api-key",
+    "openrouter": "openrouter:api-key"
+  }
+}
