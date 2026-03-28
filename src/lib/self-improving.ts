@@ -1,265 +1,399 @@
 /**
- * Karya Self-Improving Agent
+ * Karya Self-Improving Loop — Agent learns from its own performance
  * 
- * After every significant task:
- * 1. Agent reviews its own output
- * 2. Identifies what went well / what failed
- * 3. Writes lessons to workspace/lessons.md
- * 4. Before new tasks, loads relevant lessons
+ * REWRITTEN in Phase 5.5 to actually connect to ChatProcessor:
  * 
- * Over time, the agent genuinely improves.
+ * Flow:
+ *   1. ChatProcessor completes a task (onDone fires)
+ *   2. If task used tools → worth reviewing
+ *   3. LLM reviews its own output (separate call, cheap/fast)
+ *   4. If lesson worth learning → append to workspace/lessons.md
+ *   5. Before next task → relevant lessons injected into context
+ *   6. Quality score tracked in workspace/quality-stats.json
+ * 
+ * Integration points:
+ *   - Post-task: call runSelfReview() after ChatProcessor finishes
+ *   - Pre-task: call getRelevantLessons() before building context
+ *   - Stats: getLessonsStats() + getQualityStats() for dashboard
+ * 
+ * This is ASYNC and NON-BLOCKING — it runs after the response is sent.
+ * User never waits for self-review.
  */
 
 import { generateText } from "ai";
 import { getModel } from "./llm";
-import { getMemoryManager } from "./memory-v2";
 import { logger } from "./logger";
+import { eventBus } from "./event-bus";
 import * as fs from "fs";
 import * as path from "path";
 
-const LESSONS_FILE = "lessons.md";
-const MAX_LESSONS = 50;
-
-export interface Lesson {
-  id: string;
-  timestamp: number;
-  task: string;
-  outcome: "success" | "partial" | "failure";
-  whatWorked: string[];
-  whatFailed: string[];
-  improvement: string;
-  tags: string[];
-}
+// ============================================
+// TYPES
+// ============================================
 
 export interface ReviewResult {
   outcome: "success" | "partial" | "failure";
   quality: number; // 1-10
   whatWorked: string[];
   whatFailed: string[];
-  improvement: string;
+  lesson: string;
   shouldLearn: boolean;
 }
 
+export interface QualityEntry {
+  timestamp: number;
+  task: string;
+  quality: number;
+  outcome: string;
+  toolCount: number;
+  durationMs: number;
+}
+
+// ============================================
+// CONSTANTS
+// ============================================
+
+const WORKSPACE = path.join(process.cwd(), "workspace");
+const LESSONS_FILE = path.join(WORKSPACE, "lessons.md");
+const STATS_FILE = path.join(WORKSPACE, "quality-stats.json");
+
+/** Minimum tool count to trigger self-review (skip trivial tasks) */
+const MIN_TOOLS_FOR_REVIEW = 1;
+
+/** Max lessons to keep in file (prune oldest when exceeded) */
+const MAX_LESSONS = 100;
+
+/** Max characters of output to review (save tokens) */
+const MAX_REVIEW_OUTPUT = 1500;
+
+/** Only review tasks longer than this (skip instant responses) */
+const MIN_DURATION_FOR_REVIEW_MS = 2000;
+
+/** Whether self-review is enabled */
+let enabled = true;
+
+// ============================================
+// MAIN: POST-TASK REVIEW
+// ============================================
+
 /**
- * Review agent's own output after a task
+ * Run self-review after a task completes.
+ * Call this from ChatProcessor's post-processing.
+ * 
+ * This is ASYNC and fire-and-forget — it doesn't block the response.
+ * 
+ * @param task - The user's original message
+ * @param output - The agent's response text
+ * @param toolsUsed - List of tool names that were called
+ * @param durationMs - How long the task took
  */
-export async function reviewOutput(
+export async function runSelfReview(
+  task: string,
+  output: string,
+  toolsUsed: string[],
+  durationMs: number
+): Promise<void> {
+  if (!enabled) return;
+
+  // Skip trivial tasks
+  if (toolsUsed.length < MIN_TOOLS_FOR_REVIEW) return;
+  if (durationMs < MIN_DURATION_FOR_REVIEW_MS) return;
+  if (!output || output.length < 20) return;
+
+  try {
+    // Step 1: LLM reviews its own output
+    const review = await reviewOutput(task, output, toolsUsed);
+
+    // Step 2: Track quality score
+    trackQuality({
+      timestamp: Date.now(),
+      task: task.slice(0, 200),
+      quality: review.quality,
+      outcome: review.outcome,
+      toolCount: toolsUsed.length,
+      durationMs,
+    });
+
+    // Step 3: Save lesson if worthwhile
+    if (review.shouldLearn && review.lesson) {
+      saveLesson(task, review, toolsUsed);
+      logger.info("self-improving", `Lesson saved: "${review.lesson.slice(0, 60)}..."`);
+    }
+
+    // Step 4: Emit event
+    await eventBus.emit("custom:self-review", {
+      quality: review.quality,
+      outcome: review.outcome,
+      lessonSaved: review.shouldLearn,
+    });
+
+  } catch (err: any) {
+    // Self-review failure should NEVER affect the user
+    logger.debug("self-improving", `Review failed (non-critical): ${err.message}`);
+  }
+}
+
+// ============================================
+// LLM REVIEW
+// ============================================
+
+async function reviewOutput(
   task: string,
   output: string,
   toolsUsed: string[]
 ): Promise<ReviewResult> {
-  const prompt = `You are reviewing your own output. Be honest and critical.
+  const truncatedOutput = output.slice(0, MAX_REVIEW_OUTPUT);
 
-TASK: ${task}
+  const prompt = `You are reviewing your own performance on a task. Be honest, brief, and constructive.
 
-YOUR OUTPUT:
-${output.slice(0, 2000)}
+TASK: ${task.slice(0, 500)}
+TOOLS USED: ${toolsUsed.join(", ")}
+YOUR OUTPUT (truncated): ${truncatedOutput}
 
-TOOLS USED: ${toolsUsed.join(", ") || "none"}
+Rate yourself:
+1. outcome: "success" | "partial" | "failure"
+2. quality: 1-10
+3. whatWorked: 1-2 brief points
+4. whatFailed: 1-2 brief points (or empty if perfect)
+5. lesson: ONE specific actionable lesson for next time (or empty if nothing to learn)
+6. shouldLearn: true only if the lesson is genuinely useful for future tasks
 
-Evaluate your performance:
-
-1. OUTCOME: Did you complete the task successfully?
-   - success: Task fully completed
-   - partial: Some parts done, some missing
-   - failure: Task not completed or wrong result
-
-2. QUALITY (1-10): How good was your output?
-
-3. WHAT WORKED WELL: (list 1-3 things)
-
-4. WHAT COULD BE BETTER: (list 1-3 things)
-
-5. IMPROVEMENT: One specific lesson for next time.
-
-6. SHOULD LEARN: Is this lesson worth remembering? (yes/no)
-
-Respond in JSON:
-{
-  "outcome": "success|partial|failure",
-  "quality": 7,
-  "whatWorked": ["clear explanation", "good examples"],
-  "whatFailed": ["could be more concise"],
-  "improvement": "Next time, start with a summary before diving into details",
-  "shouldLearn": true
-}`;
+Respond ONLY with valid JSON, no other text:
+{"outcome":"success","quality":8,"whatWorked":["x"],"whatFailed":["y"],"lesson":"z","shouldLearn":true}`;
 
   try {
     const llm = getModel();
     const result = await generateText({
-      model: llm,
+      model: llm as any,
       prompt,
+      maxOutputTokens: 300,
     });
 
-    // Parse JSON response
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error("No JSON in response");
+      return defaultReview();
     }
 
-    const review = JSON.parse(jsonMatch[0]) as ReviewResult;
-    return review;
+    const parsed = JSON.parse(jsonMatch[0]);
 
-  } catch (err) {
-    logger.warn("self-improving", "Failed to parse review, using defaults", err);
     return {
-      outcome: "partial",
-      quality: 5,
-      whatWorked: [],
-      whatFailed: [],
-      improvement: "",
-      shouldLearn: false,
+      outcome: parsed.outcome || "partial",
+      quality: Math.min(10, Math.max(1, parseInt(parsed.quality) || 5)),
+      whatWorked: Array.isArray(parsed.whatWorked) ? parsed.whatWorked.slice(0, 3) : [],
+      whatFailed: Array.isArray(parsed.whatFailed) ? parsed.whatFailed.slice(0, 3) : [],
+      lesson: typeof parsed.lesson === "string" ? parsed.lesson : "",
+      shouldLearn: !!parsed.shouldLearn,
     };
+  } catch {
+    return defaultReview();
   }
 }
 
-/**
- * Save a lesson to lessons.md
- */
-export async function saveLesson(
-  task: string,
-  review: ReviewResult,
-  tags: string[] = []
-): Promise<void> {
-  if (!review.shouldLearn || !review.improvement) {
-    return;
-  }
-
-  const memory = getMemoryManager();
-  const workspacePath = path.join(process.cwd(), "workspace");
-  const lessonsPath = path.join(workspacePath, LESSONS_FILE);
-
-  const lesson: Lesson = {
-    id: `lesson-${Date.now()}`,
-    timestamp: Date.now(),
-    task: task.slice(0, 200),
-    outcome: review.outcome,
-    whatWorked: review.whatWorked,
-    whatFailed: review.whatFailed,
-    improvement: review.improvement,
-    tags,
+function defaultReview(): ReviewResult {
+  return {
+    outcome: "partial",
+    quality: 5,
+    whatWorked: [],
+    whatFailed: [],
+    lesson: "",
+    shouldLearn: false,
   };
+}
 
-  // Format lesson
-  const date = new Date().toISOString().split("T")[0];
-  const lessonMd = `
-## ${date} — ${lesson.outcome.toUpperCase()}
+// ============================================
+// LESSON STORAGE
+// ============================================
 
-**Task:** ${lesson.task}
+function saveLesson(task: string, review: ReviewResult, toolsUsed: string[]): void {
+  try {
+    const date = new Date().toISOString().split("T")[0];
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-**What worked:**
-${lesson.whatWorked.map(w => `- ${w}`).join("\n") || "- (none noted)"}
-
-**What could be better:**
-${lesson.whatFailed.map(f => `- ${f}`).join("\n") || "- (none noted)"}
-
-**Lesson learned:**
-> ${lesson.improvement}
-
-**Tags:** ${lesson.tags.join(", ") || "general"}
+    const lessonBlock = `
+### ${date} ${time} — ${review.outcome.toUpperCase()} (${review.quality}/10)
+- **Task:** ${task.slice(0, 150)}
+- **Tools:** ${toolsUsed.join(", ")}
+${review.whatWorked.length > 0 ? `- **Worked:** ${review.whatWorked.join("; ")}` : ""}
+${review.whatFailed.length > 0 ? `- **Improve:** ${review.whatFailed.join("; ")}` : ""}
+- **💡 Lesson:** ${review.lesson}
 
 ---
 `;
 
-  // Append to lessons file
-  let content = "";
-  if (fs.existsSync(lessonsPath)) {
-    content = fs.readFileSync(lessonsPath, "utf-8");
-  } else {
-    content = `# Lessons Learned
+    let content = "";
+    if (fs.existsSync(LESSONS_FILE)) {
+      content = fs.readFileSync(LESSONS_FILE, "utf-8");
+    } else {
+      content = `# Karya — Lessons Learned
 
-This file contains lessons from past tasks. Review before starting similar work.
+This file is auto-generated. The agent reviews its own output after each significant task
+and writes down lessons to improve over time.
 
 ---
 `;
+    }
+
+    content += lessonBlock;
+
+    // Prune if too many lessons
+    const sections = content.split(/^---$/m);
+    if (sections.length > MAX_LESSONS + 2) {
+      // Keep header + last MAX_LESSONS sections
+      const header = sections.slice(0, 2).join("---");
+      const recent = sections.slice(-(MAX_LESSONS)).join("---");
+      content = header + "---" + recent;
+    }
+
+    fs.writeFileSync(LESSONS_FILE, content, "utf-8");
+  } catch (err: any) {
+    logger.debug("self-improving", `Failed to save lesson: ${err.message}`);
   }
+}
 
-  content += lessonMd;
-  fs.writeFileSync(lessonsPath, content, "utf-8");
+// ============================================
+// PRE-TASK: LOAD RELEVANT LESSONS
+// ============================================
 
-  logger.info("self-improving", `Saved lesson: ${lesson.improvement.slice(0, 50)}...`);
+/**
+ * Search lessons file for relevant past lessons.
+ * Returns a formatted string to inject into agent context.
+ * 
+ * Call this before building the context for a new task.
+ * Uses simple text search (no vectors needed — lessons are short).
+ */
+export function getRelevantLessons(task: string, maxResults: number = 3): string {
+  if (!fs.existsSync(LESSONS_FILE)) return "";
+
+  try {
+    const content = fs.readFileSync(LESSONS_FILE, "utf-8");
+    const sections = content.split(/^---$/m).filter((s) => s.includes("**💡 Lesson:**"));
+
+    if (sections.length === 0) return "";
+
+    // Simple keyword matching (fast, no LLM call)
+    const taskWords = task.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    const scored = sections.map((section) => {
+      const lower = section.toLowerCase();
+      let score = 0;
+      for (const word of taskWords) {
+        if (lower.includes(word)) score++;
+      }
+      return { section, score };
+    });
+
+    const relevant = scored
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxResults)
+      .map((s) => s.section.trim());
+
+    if (relevant.length === 0) return "";
+
+    return `\n## 💡 Relevant Lessons from Past Tasks\n\n${relevant.join("\n\n---\n\n")}\n\nApply these lessons to improve your response.\n`;
+  } catch {
+    return "";
+  }
+}
+
+// ============================================
+// QUALITY TRACKING
+// ============================================
+
+function trackQuality(entry: QualityEntry): void {
+  try {
+    let stats: QualityEntry[] = [];
+
+    if (fs.existsSync(STATS_FILE)) {
+      const content = fs.readFileSync(STATS_FILE, "utf-8");
+      stats = JSON.parse(content);
+    }
+
+    stats.push(entry);
+
+    // Keep last 500 entries
+    if (stats.length > 500) {
+      stats = stats.slice(-500);
+    }
+
+    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2), "utf-8");
+  } catch {
+    // Non-critical
+  }
 }
 
 /**
- * Load relevant lessons for a new task
+ * Get quality statistics.
  */
-export async function loadRelevantLessons(
-  task: string,
-  maxLessons: number = 5
-): Promise<string> {
-  const memory = getMemoryManager();
-  
-  // Search for relevant lessons
-  const results = await memory.search(task, { maxResults: maxLessons });
-  
-  if (results.length === 0) {
-    return "";
+export function getQualityStats(): {
+  totalReviews: number;
+  averageQuality: number;
+  successRate: number;
+  recentTrend: "improving" | "stable" | "declining" | "insufficient_data";
+  lessonCount: number;
+} {
+  // Quality stats
+  let stats: QualityEntry[] = [];
+  try {
+    if (fs.existsSync(STATS_FILE)) {
+      stats = JSON.parse(fs.readFileSync(STATS_FILE, "utf-8"));
+    }
+  } catch {
+    stats = [];
   }
 
-  // Format lessons for context
-  const lessons = results
-    .filter(r => r.entry.source === LESSONS_FILE)
-    .map(r => r.snippet)
-    .join("\n\n");
+  const totalReviews = stats.length;
+  const averageQuality = totalReviews > 0
+    ? Math.round((stats.reduce((s, e) => s + e.quality, 0) / totalReviews) * 10) / 10
+    : 0;
+  const successRate = totalReviews > 0
+    ? Math.round((stats.filter((e) => e.outcome === "success").length / totalReviews) * 100)
+    : 0;
 
-  if (!lessons) {
-    return "";
+  // Trend: compare last 10 to previous 10
+  let recentTrend: "improving" | "stable" | "declining" | "insufficient_data" = "insufficient_data";
+  if (stats.length >= 20) {
+    const recent10 = stats.slice(-10);
+    const prev10 = stats.slice(-20, -10);
+    const recentAvg = recent10.reduce((s, e) => s + e.quality, 0) / 10;
+    const prevAvg = prev10.reduce((s, e) => s + e.quality, 0) / 10;
+    const diff = recentAvg - prevAvg;
+    if (diff > 0.5) recentTrend = "improving";
+    else if (diff < -0.5) recentTrend = "declining";
+    else recentTrend = "stable";
   }
 
-  return `## Relevant Lessons from Past Tasks
-
-${lessons}
-
----
-
-Apply these lessons to the current task.`;
-}
-
-/**
- * Get lessons stats
- */
-export function getLessonsStats(): { total: number; success: number; failure: number } {
-  const workspacePath = path.join(process.cwd(), "workspace");
-  const lessonsPath = path.join(workspacePath, LESSONS_FILE);
-
-  if (!fs.existsSync(lessonsPath)) {
-    return { total: 0, success: 0, failure: 0 };
+  // Lesson count
+  let lessonCount = 0;
+  try {
+    if (fs.existsSync(LESSONS_FILE)) {
+      const content = fs.readFileSync(LESSONS_FILE, "utf-8");
+      lessonCount = (content.match(/\*\*💡 Lesson:\*\*/g) || []).length;
+    }
+  } catch {
+    lessonCount = 0;
   }
-
-  const content = fs.readFileSync(lessonsPath, "utf-8");
-  const successCount = (content.match(/— SUCCESS/g) || []).length;
-  const failureCount = (content.match(/— FAILURE/g) || []).length;
-  const partialCount = (content.match(/— PARTIAL/g) || []).length;
 
   return {
-    total: successCount + failureCount + partialCount,
-    success: successCount,
-    failure: failureCount,
+    totalReviews,
+    averageQuality,
+    successRate,
+    recentTrend,
+    lessonCount,
   };
 }
 
+// ============================================
+// CONTROL
+// ============================================
+
 /**
- * Self-improvement cycle — call after significant tasks
+ * Enable or disable self-review.
  */
-export async function selfImprove(
-  task: string,
-  output: string,
-  toolsUsed: string[],
-  tags: string[] = []
-): Promise<{ reviewed: boolean; lessonSaved: boolean }> {
-  try {
-    // Step 1: Review output
-    const review = await reviewOutput(task, output, toolsUsed);
-    
-    // Step 2: Save lesson if worthwhile
-    if (review.shouldLearn) {
-      await saveLesson(task, review, tags);
-      return { reviewed: true, lessonSaved: true };
-    }
-    
-    return { reviewed: true, lessonSaved: false };
-  } catch (err) {
-    logger.error("self-improving", "Self-improvement cycle failed", err);
-    return { reviewed: false, lessonSaved: false };
-  }
+export function setSelfImproveEnabled(value: boolean): void {
+  enabled = value;
+  logger.info("self-improving", `Self-review ${value ? "enabled" : "disabled"}`);
+}
+
+export function isSelfImproveEnabled(): boolean {
+  return enabled;
 }

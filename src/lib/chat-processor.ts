@@ -25,6 +25,7 @@ import {
 } from "@/lib/session-manager";
 import { eventBus } from "@/lib/event-bus";
 import { getWorkspaceContext, initWorkspace, logToDaily } from "@/lib/memory-engine";
+import { getRelevantLessons, runSelfReview } from "@/lib/self-improving";
 
 // ============================================
 // TYPES
@@ -378,6 +379,15 @@ export async function processChat(
     });
   }
 
+  // Inject relevant lessons from past tasks (self-improving)
+  const lessons = getRelevantLessons(message);
+  if (lessons) {
+    contextMessages.push({
+      role: "system",
+      content: lessons,
+    });
+  }
+
   // Chat history (excluding current message — we add it below with images)
   contextMessages.push(
     ...recentMessages.slice(0, -1).map((m) => ({
@@ -540,6 +550,15 @@ export async function processChat(
   };
 
   events.onDone?.(result);
+
+  // ---- 9. Self-review (async, fire-and-forget — never blocks response) ----
+  if (allToolCalls.length > 0 && (channel as string) !== "heartbeat") {
+    const toolNames = allToolCalls.map((t) => t.toolName);
+    runSelfReview(message, fullText, toolNames, result.durationMs).catch(() => {
+      // Self-review failure is never critical
+    });
+  }
+
   return result;
 }
 
