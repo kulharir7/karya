@@ -42,7 +42,7 @@ export const httpRequestTool = createTool({
   inputSchema: z.object({
     url: z.string().describe("Request URL"),
     method: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).optional().describe("HTTP method (default GET)"),
-    headers: z.record(z.string()).optional().describe("Custom headers"),
+    headers: z.record(z.string(), z.string()).optional().describe("Custom headers"),
     body: z.string().optional().describe("Request body (JSON string)"),
     timeout: z.number().optional().describe("Timeout in seconds (default 15)"),
   }),

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Production: standalone output (includes server + static)
+  // Creates .next/standalone/ — single folder deployable
+  output: "standalone",
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
