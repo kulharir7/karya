@@ -22,5 +22,21 @@
     "outcome": "success",
     "toolCount": 1,
     "durationMs": 23598
+  },
+  {
+    "timestamp": 1774691695284,
+    "task": "Go to LinkedIn, check my profile details, then search for 'AI Engineer' jobs in India and list the top 5 matching jobs based on my profile. If you can apply to any, do it.",
+    "quality": 6,
+    "outcome": "partial",
+    "toolCount": 1,
+    "durationMs": 17802
+  },
+  {
+    "timestamp": 1774691765523,
+    "task": "Search web for 'AI Engineer jobs India remote 2026' and list top 5 results with links",
+    "quality": 7,
+    "outcome": "partial",
+    "toolCount": 1,
+    "durationMs": 22371
   }
 ]

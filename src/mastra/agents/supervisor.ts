@@ -68,6 +68,11 @@ import {
   pluginListTool, pluginCreateTool, pluginInstallTool, pluginToggleTool, pluginUninstallTool,
 } from "../tools/plugins";
 import { TokenLimiterProcessor } from "@mastra/core/processors";
+import {
+  stepControlProcessor,
+  securityFilterProcessor,
+  inputNormalizerProcessor,
+} from "../processors";
 
 // ============================================
 // PROCESSORS
@@ -75,8 +80,8 @@ import { TokenLimiterProcessor } from "@mastra/core/processors";
 
 // Token limiter — prevents context from exceeding model limits
 const tokenLimiter = new TokenLimiterProcessor({
-  limit: 16000,          // Max tokens for context window
-  strategy: "truncate",  // Truncate older messages (not abort)
+  limit: 16000,
+  strategy: "truncate",
   countMode: "cumulative",
 });
 
@@ -408,7 +413,12 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
   model: getModelForAgent(),
   memory,
   // Processors — input/output pipeline
-  inputProcessors: [tokenLimiter],
+  inputProcessors: [
+    inputNormalizerProcessor,    // 1. Clean input (zero-width chars, whitespace)
+    securityFilterProcessor,     // 2. Block prompt injection attempts
+    tokenLimiter,                // 3. Limit context tokens (16K)
+    stepControlProcessor,        // 4. Per-step: disable tools after 8 steps
+  ],
   // Mastra supervisor delegation — subagents auto-available via their descriptions
   agents: {
     browserAgent,
