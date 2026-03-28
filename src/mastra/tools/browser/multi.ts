@@ -6,13 +6,13 @@ export const browserAgentTool = createTool({
   id: "browser-agent",
   description:
     "Execute a complex multi-step browser task using natural language. " +
-    "Use this for tasks that require multiple clicks, navigations, and data extraction. " +
-    "Examples: 'Go to Amazon, search for headphones, and find the cheapest one', " +
-    "'Open LinkedIn and check my notifications', " +
-    "'Go to MakeMyTrip and search flights from Delhi to Mumbai on March 28'",
+    "Use for tasks needing multiple clicks, navigations, and data extraction. " +
+    "Examples: 'Go to Amazon, search headphones, find cheapest', " +
+    "'Open LinkedIn and check notifications'. " +
+    "If browser unavailable, break the task into web-search + api-call steps instead.",
   inputSchema: z.object({
-    task: z.string().describe("Full description of the multi-step browser task to execute"),
-    startUrl: z.string().optional().describe("Optional starting URL (otherwise starts from current page)"),
+    task: z.string().describe("Full description of the multi-step browser task"),
+    startUrl: z.string().optional().describe("Optional starting URL"),
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -25,7 +25,7 @@ export const browserAgentTool = createTool({
 
       if (startUrl) {
         const page = stagehand.context.pages()[0];
-        await page.goto(startUrl, { waitUntil: "domcontentloaded" });
+        await page.goto(startUrl, { waitUntil: "domcontentloaded", timeoutMs: 15000 });
       }
 
       const agent = stagehand.agent();
@@ -39,7 +39,7 @@ export const browserAgentTool = createTool({
     } catch (err: any) {
       return {
         success: false,
-        result: `Error: ${err.message}`,
+        result: `❌ Browser error: ${err.message}. Try breaking this into web-search + individual steps.`,
         steps: 0,
       };
     }

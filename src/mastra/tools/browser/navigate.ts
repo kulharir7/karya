@@ -4,7 +4,7 @@ import { getStagehand } from "@/lib/stagehand";
 
 export const navigateTool = createTool({
   id: "browser-navigate",
-  description: "Navigate the browser to a specific URL. Use this to open any website.",
+  description: "Navigate the browser to a specific URL. Use this to open any website. If browser is unavailable, use web-search instead.",
   inputSchema: z.object({
     url: z.string().describe("The URL to navigate to (e.g., https://google.com)"),
   }),
@@ -14,14 +14,18 @@ export const navigateTool = createTool({
     title: z.string(),
   }),
   execute: async ({ url }) => {
-    const stagehand = await getStagehand();
-    const page = stagehand.context.pages()[0];
-    await page.goto(url, { waitUntil: "domcontentloaded" });
-    const title = await page.title();
-    return {
-      success: true,
-      url,
-      title,
-    };
+    try {
+      const stagehand = await getStagehand();
+      const page = stagehand.context.pages()[0];
+      await page.goto(url, { waitUntil: "domcontentloaded", timeoutMs: 15000 });
+      const title = await page.title();
+      return { success: true, url, title };
+    } catch (err: any) {
+      return {
+        success: false,
+        url,
+        title: `❌ Browser error: ${err.message}. Try using web-search tool instead.`,
+      };
+    }
   },
 });
