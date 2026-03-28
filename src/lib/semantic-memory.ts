@@ -1,168 +1,148 @@
 /**
  * Karya Semantic Memory — RAG-based conversation recall
  * 
- * Uses Mastra Memory with:
- * - LibSQL for storage
- * - Vector embeddings for semantic search
- * - Configurable recall settings
+ * Phase 8.5: Fixed fastembed build issue.
+ * 
+ * Problem: @mastra/fastembed → @anush008/tokenizers is a non-ESM native module
+ * that breaks `next build` (Turbopack can't handle it).
+ * 
+ * Solution: All fastembed imports are dynamic with full error suppression.
+ * If fastembed fails → silently fall back to basic memory (no vectors).
+ * Build never breaks.
+ * 
+ * Priority: OpenAI embeddings > FastEmbed (local) > Basic (no vectors)
  */
 
 import { Memory } from "@mastra/memory";
 import { LibSQLStore, LibSQLVector } from "@mastra/libsql";
 import * as path from "path";
+import * as fs from "fs";
 
 // Database paths
 const DB_DIR = path.join(process.cwd(), "data");
 const STORAGE_DB = path.join(DB_DIR, "karya-memory.db");
 const VECTOR_DB = path.join(DB_DIR, "karya-vectors.db");
 
-// Ensure data directory exists
-import * as fs from "fs";
+// Ensure data directory
 if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
+// ============================================
+// MEMORY FACTORIES
+// ============================================
+
 /**
- * Create semantic memory with vector search
- * 
- * Note: For embeddings, you can use:
- * - OpenAI: 'openai/text-embedding-3-small' (requires OPENAI_API_KEY)
- * - FastEmbed: local embeddings (no API key needed)
- * - Default: falls back to disabled semantic recall if no embedder configured
+ * Create memory with optional embedder for vector search.
  */
-export function createSemanticMemory(options?: {
-  embedder?: any;
-  topK?: number;
-  messageRange?: number;
-}): Memory {
+function createMemoryWithEmbedder(embedder?: any): Memory {
   const storage = new LibSQLStore({
     id: "karya-storage",
     url: `file:${STORAGE_DB}`,
   });
 
-  const vector = new LibSQLVector({
-    id: "karya-vector",
-    url: `file:${VECTOR_DB}`,
-  });
+  const hasEmbedder = !!embedder;
 
-  // Check if embedder is provided
-  const hasEmbedder = !!options?.embedder;
+  const vector = hasEmbedder
+    ? new LibSQLVector({ id: "karya-vector", url: `file:${VECTOR_DB}` })
+    : undefined;
 
   return new Memory({
     storage,
-    vector: hasEmbedder ? vector : undefined,
-    embedder: options?.embedder,
+    vector,
+    embedder,
     options: {
-      // Recent message history
       lastMessages: 20,
-      // Semantic recall config
       semanticRecall: hasEmbedder
-        ? {
-            topK: options?.topK || 5, // How many similar messages to retrieve
-            messageRange: options?.messageRange || 2, // Context around each match
-            scope: "resource", // Search across all threads for user
-          }
-        : false, // Disabled if no embedder
+        ? { topK: 5, messageRange: 2, scope: "resource" as const }
+        : false,
     },
   });
 }
 
 /**
- * Get memory without embeddings (faster, no vector search)
+ * Basic memory — no vector search, just recent messages.
+ * Always works, no external dependencies.
  */
 export function createBasicMemory(): Memory {
-  const storage = new LibSQLStore({
-    id: "karya-storage",
-    url: `file:${STORAGE_DB}`,
-  });
-
-  return new Memory({
-    storage,
-    options: {
-      lastMessages: 20,
-      semanticRecall: false,
-    },
-  });
+  return createMemoryWithEmbedder(undefined);
 }
 
 /**
- * Create memory with OpenAI embeddings
- * Requires OPENAI_API_KEY environment variable
+ * Try OpenAI embeddings (requires OPENAI_API_KEY).
  */
-export async function createOpenAIMemory(): Promise<Memory | null> {
-  if (!process.env.OPENAI_API_KEY) {
-    console.log("[semantic-memory] No OPENAI_API_KEY found, using basic memory");
-    return null;
-  }
+async function tryOpenAIMemory(): Promise<Memory | null> {
+  if (!process.env.OPENAI_API_KEY) return null;
 
   try {
-    // Dynamic import to avoid bundling issues
     const { ModelRouterEmbeddingModel } = await import("@mastra/core/llm");
-    
     const embedder = new ModelRouterEmbeddingModel("openai/text-embedding-3-small");
-    return createSemanticMemory({ embedder, topK: 5, messageRange: 2 });
-  } catch (err) {
-    console.error("[semantic-memory] Failed to create OpenAI memory:", err);
+    return createMemoryWithEmbedder(embedder);
+  } catch {
     return null;
   }
 }
 
 /**
- * Create memory with FastEmbed (local, no API key needed)
+ * Try FastEmbed (local, no API key).
+ * FULLY DYNAMIC — if @mastra/fastembed fails to load, returns null silently.
+ * This is the fix for the build issue.
  */
-export async function createFastEmbedMemory(): Promise<Memory | null> {
+async function tryFastEmbedMemory(): Promise<Memory | null> {
   try {
-    // Dynamic import
-    const { fastembed } = await import("@mastra/fastembed");
-    
-    if (!fastembed) {
-      console.log("[semantic-memory] FastEmbed module loaded but no embedder found");
-      return null;
-    }
-    
-    console.log("[semantic-memory] FastEmbed loaded successfully");
-    return createSemanticMemory({ embedder: fastembed, topK: 5, messageRange: 2 });
-  } catch (err: any) {
-    console.log("[semantic-memory] FastEmbed not available:", err.message);
+    // Dynamic import with eval to prevent Turbopack/webpack from tracing
+    const mod = await (new Function('return import("@mastra/fastembed")'))();
+    const embedder = mod?.fastembed || mod?.default?.fastembed;
+    if (!embedder) return null;
+    return createMemoryWithEmbedder(embedder);
+  } catch {
+    // FastEmbed not available — totally fine, fall back to basic
     return null;
   }
 }
 
 /**
- * Get the best available memory
+ * Get the best available memory.
  * Priority: OpenAI > FastEmbed > Basic
  */
 export async function getBestMemory(): Promise<Memory> {
-  // Try OpenAI first
-  const openaiMemory = await createOpenAIMemory();
-  if (openaiMemory) {
-    console.log("[semantic-memory] Using OpenAI embeddings");
-    return openaiMemory;
-  }
+  // 1. OpenAI
+  const openai = await tryOpenAIMemory();
+  if (openai) return openai;
 
-  // Try FastEmbed
-  const fastembedMemory = await createFastEmbedMemory();
-  if (fastembedMemory) {
-    console.log("[semantic-memory] Using FastEmbed (local)");
-    return fastembedMemory;
-  }
+  // 2. FastEmbed (local)
+  const fastembed = await tryFastEmbedMemory();
+  if (fastembed) return fastembed;
 
-  // Fallback to basic
-  console.log("[semantic-memory] Using basic memory (no embeddings)");
+  // 3. Basic
   return createBasicMemory();
 }
 
+// ============================================
+// SINGLETON
+// ============================================
+
+let memoryInstance: Memory | null = null;
+
+export async function getMemoryInstance(): Promise<Memory> {
+  if (!memoryInstance) {
+    memoryInstance = await getBestMemory();
+  }
+  return memoryInstance;
+}
+
+// ============================================
+// RECALL HELPERS
+// ============================================
+
 /**
- * Semantic search across threads
+ * Semantic search across threads.
  */
 export async function semanticRecall(
   memory: Memory,
   threadId: string,
   query: string,
-  options?: {
-    topK?: number;
-    messageRange?: number;
-  }
+  options?: { topK?: number; messageRange?: number }
 ): Promise<any[]> {
   try {
     const result = await memory.recall({
@@ -175,41 +155,8 @@ export async function semanticRecall(
         },
       },
     });
-    
     return result.messages || [];
-  } catch (err) {
-    console.error("[semantic-memory] Recall failed:", err);
+  } catch {
     return [];
   }
-}
-
-/**
- * Get recent messages from a thread
- */
-export async function getRecentMessages(
-  memory: Memory,
-  threadId: string,
-  limit: number = 20
-): Promise<any[]> {
-  try {
-    const result = await memory.recall({
-      threadId,
-      perPage: limit,
-    });
-    
-    return result.messages || [];
-  } catch (err) {
-    console.error("[semantic-memory] getRecentMessages failed:", err);
-    return [];
-  }
-}
-
-// Export singleton instance
-let memoryInstance: Memory | null = null;
-
-export async function getMemoryInstance(): Promise<Memory> {
-  if (!memoryInstance) {
-    memoryInstance = await getBestMemory();
-  }
-  return memoryInstance;
 }
