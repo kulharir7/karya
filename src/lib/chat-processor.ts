@@ -555,6 +555,13 @@ export async function processChat(
         const toolName = resolveToolName(rawName);
         events.onToolApproval?.(toolName, ev?.payload, ev?.toolCallId || "");
         logger.info("chat-processor", `Tool suspended: ${toolName}`);
+      } else if (type === "step-finish") {
+        // Step completed — extract usage stats if available
+        const usage = ev?.usage || ev?.payload?.usage;
+        if (usage) {
+          // Store token usage for metadata
+          (streamResult as any)._lastUsage = usage;
+        }
       } else if (type === "tool-result") {
         const rawName = ev?.toolName || ev?.name || "unknown";
         const toolName = resolveToolName(rawName);
