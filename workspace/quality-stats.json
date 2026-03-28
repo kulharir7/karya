@@ -14,5 +14,13 @@
     "outcome": "partial",
     "toolCount": 3,
     "durationMs": 109020
+  },
+  {
+    "timestamp": 1774690384283,
+    "task": "muje mere system ki info btao",
+    "quality": 8,
+    "outcome": "success",
+    "toolCount": 1,
+    "durationMs": 23598
   }
 ]

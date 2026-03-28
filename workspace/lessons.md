@@ -22,3 +22,12 @@ and writes down lessons to improve over time.
 - **💡 Lesson:** Acknowledge tool limitations upfront and have backup approaches ready
 
 ---
+
+### 2026-03-28 03:03 PM — SUCCESS (8/10)
+- **Task:** muje mere system ki info btao
+- **Tools:** system-info
+- **Worked:** Provided comprehensive system information including OS, CPU, memory, and directories; Used appropriate Hindi language for user's likely preference
+- **Improve:** Could have formatted memory values more clearly (e.g., GB units); No explanation of what each field means for less technical users
+- **💡 Lesson:** Include units and brief explanations for technical specifications to improve clarity
+
+---

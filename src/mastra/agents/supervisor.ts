@@ -67,6 +67,18 @@ import {
 import {
   pluginListTool, pluginCreateTool, pluginInstallTool, pluginToggleTool, pluginUninstallTool,
 } from "../tools/plugins";
+import { TokenLimiterProcessor } from "@mastra/core/processors";
+
+// ============================================
+// PROCESSORS
+// ============================================
+
+// Token limiter — prevents context from exceeding model limits
+const tokenLimiter = new TokenLimiterProcessor({
+  limit: 16000,          // Max tokens for context window
+  strategy: "truncate",  // Truncate older messages (not abort)
+  countMode: "cumulative",
+});
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -395,6 +407,8 @@ User: "todo app banao"
 This is CRITICAL for good UX — don't pollute user's workspace with unnecessary files!`,
   model: getModelForAgent(),
   memory,
+  // Processors — input/output pipeline
+  inputProcessors: [tokenLimiter],
   // Mastra supervisor delegation — subagents auto-available via their descriptions
   agents: {
     browserAgent,
