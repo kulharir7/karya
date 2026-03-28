@@ -1,323 +1,291 @@
 /**
  * Context Compaction — Auto-summarize long conversations
  * 
- * OpenClaw-style compaction with memory flush:
- * 1. When approaching limit, trigger memory flush first
- * 2. Agent writes durable facts to MEMORY.md / daily logs
- * 3. Then compact (summarize old messages)
- * 4. Continue with fresh context + memory files loaded
+ * Phase 8.1: REWRITTEN and integrated into ChatProcessor.
+ * 
+ * Problem: ChatProcessor loads last 20 messages. If sessions are long,
+ * early context is lost. If we load more, we hit token limits.
+ * 
+ * Solution: When token count is high, summarize older messages into a
+ * compact summary and keep only recent messages + summary.
+ * 
+ * Flow in ChatProcessor:
+ *   1. Load last 20 messages from DB
+ *   2. Estimate token count
+ *   3. If over threshold → compact older messages into summary
+ *   4. Insert summary as system message + keep recent messages
+ *   5. Agent gets: workspace context → summary → recent chat → new message
+ * 
+ * Compaction also saves key facts to daily memory log (memory flush)
+ * so important info survives even after summary.
+ * 
+ * No external dependencies — uses getModel() for summary, logToDaily() for flush.
+ * Does NOT use memory-v2/fastembed (avoids build issue).
  */
 
 import { generateText } from "ai";
 import { getModel } from "./llm";
-import { getMemoryManager } from "./memory-v2";
+import { logToDaily } from "./memory-engine";
 import { logger } from "./logger";
 
-// Config
-const MAX_MESSAGES_BEFORE_COMPACT = 20;
-const KEEP_RECENT_MESSAGES = 6;
-const MAX_CONTEXT_CHARS = 50000;
-const SOFT_THRESHOLD_CHARS = 40000; // Trigger memory flush before hard compact
-const MEMORY_FLUSH_ENABLED = true;
+// ============================================
+// CONFIG
+// ============================================
 
-export interface Message {
-  role: "user" | "assistant" | "system" | "tool";
+/** Max estimated tokens before compaction triggers */
+const TOKEN_THRESHOLD = 12000;
+
+/** Keep this many recent messages after compaction */
+const KEEP_RECENT = 8;
+
+/** Minimum messages before compaction can happen */
+const MIN_MESSAGES_FOR_COMPACTION = 12;
+
+/** Max tokens for the summary itself */
+const MAX_SUMMARY_TOKENS = 500;
+
+// ============================================
+// TYPES
+// ============================================
+
+export interface ContextMessage {
+  role: "user" | "assistant" | "system";
   content: string;
-  toolName?: string;
-  timestamp?: number;
 }
 
 export interface CompactionResult {
-  messages: Message[];
-  summary: string | null;
+  messages: ContextMessage[];
   compacted: boolean;
   originalCount: number;
   newCount: number;
-  savedChars: number;
+  savedTokens: number;
+  summary: string | null;
+  factsFlushed: number;
 }
 
-/**
- * Check if compaction is needed
- */
-export function needsCompaction(messages: Message[]): boolean {
-  if (messages.length > MAX_MESSAGES_BEFORE_COMPACT) return true;
-  
-  const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
-  if (totalChars > MAX_CONTEXT_CHARS) return true;
-  
-  return false;
-}
+// ============================================
+// TOKEN ESTIMATION
+// ============================================
 
 /**
- * Compact messages by summarizing older ones
+ * Rough token estimate: ~4 chars per token for English.
+ * Good enough for deciding when to compact (not billing).
  */
-export async function compactMessages(
-  messages: Message[],
-  options: {
-    keepRecent?: number;
-    model?: string;
-  } = {}
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+function estimateMessagesTokens(messages: ContextMessage[]): number {
+  return messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0); // +4 for role/separator overhead
+}
+
+// ============================================
+// MAIN: SMART COMPACT
+// ============================================
+
+/**
+ * Check if messages need compaction and do it if needed.
+ * 
+ * Call this in ChatProcessor AFTER loading messages, BEFORE building context.
+ * 
+ * Returns the (possibly compacted) message array.
+ */
+export async function compactIfNeeded(
+  messages: ContextMessage[],
+  sessionId?: string
 ): Promise<CompactionResult> {
-  const keepRecent = options.keepRecent || KEEP_RECENT_MESSAGES;
-  
-  // Not enough messages to compact
-  if (messages.length <= keepRecent + 2) {
+  const tokenCount = estimateMessagesTokens(messages);
+
+  // Not enough messages or tokens — skip
+  if (messages.length < MIN_MESSAGES_FOR_COMPACTION || tokenCount < TOKEN_THRESHOLD) {
     return {
       messages,
-      summary: null,
       compacted: false,
       originalCount: messages.length,
       newCount: messages.length,
-      savedChars: 0,
+      savedTokens: 0,
+      summary: null,
+      factsFlushed: 0,
     };
   }
-  
-  // Split messages
-  const oldMessages = messages.slice(0, -keepRecent);
-  const recentMessages = messages.slice(-keepRecent);
-  
-  // Extract key info from old messages
-  const toolCalls = oldMessages.filter(m => m.role === "tool" || m.toolName);
-  const decisions = oldMessages.filter(m => 
-    m.content.toLowerCase().includes("decision") ||
-    m.content.toLowerCase().includes("confirmed") ||
-    m.content.toLowerCase().includes("completed")
-  );
-  
-  // Generate summary
-  const summaryPrompt = `Summarize this conversation history into a compact form.
 
-CONVERSATION:
-${oldMessages.map(m => `[${m.role}]: ${m.content.slice(0, 500)}`).join("\n\n")}
+  logger.info(
+    "compaction",
+    `Compacting: ${messages.length} messages, ~${tokenCount} tokens (threshold: ${TOKEN_THRESHOLD})`
+  );
+
+  // Split: old messages to summarize, recent to keep
+  const oldMessages = messages.slice(0, -KEEP_RECENT);
+  const recentMessages = messages.slice(-KEEP_RECENT);
+
+  // ---- Step 1: Extract and flush key facts to daily memory ----
+  const facts = extractKeyFacts(oldMessages);
+  if (facts.length > 0 && sessionId) {
+    try {
+      logToDaily(`## Auto-saved before context compaction (${sessionId})\n${facts.map((f) => `- ${f}`).join("\n")}`);
+    } catch {
+      // Non-critical
+    }
+  }
+
+  // ---- Step 2: Generate summary of old messages ----
+  let summary: string | null = null;
+
+  try {
+    summary = await generateSummary(oldMessages);
+  } catch (err: any) {
+    logger.warn("compaction", `Summary generation failed: ${err.message}`);
+    // Fallback: simple truncation
+    summary = createFallbackSummary(oldMessages);
+  }
+
+  // ---- Step 3: Build compacted message array ----
+  const compactedMessages: ContextMessage[] = [];
+
+  if (summary) {
+    compactedMessages.push({
+      role: "system",
+      content: `[CONVERSATION SUMMARY — ${oldMessages.length} earlier messages compacted]\n\n${summary}`,
+    });
+  }
+
+  compactedMessages.push(...recentMessages);
+
+  const newTokenCount = estimateMessagesTokens(compactedMessages);
+
+  logger.info(
+    "compaction",
+    `Compacted: ${messages.length} → ${compactedMessages.length} messages, ~${tokenCount} → ~${newTokenCount} tokens`
+  );
+
+  return {
+    messages: compactedMessages,
+    compacted: true,
+    originalCount: messages.length,
+    newCount: compactedMessages.length,
+    savedTokens: tokenCount - newTokenCount,
+    summary,
+    factsFlushed: facts.length,
+  };
+}
+
+// ============================================
+// SUMMARY GENERATION
+// ============================================
+
+async function generateSummary(messages: ContextMessage[]): Promise<string> {
+  // Build conversation text (truncated per message to save tokens)
+  const conversationText = messages
+    .map((m) => {
+      const prefix = m.role === "user" ? "User" : m.role === "assistant" ? "Assistant" : "System";
+      const content = m.content.length > 300 ? m.content.slice(0, 300) + "..." : m.content;
+      return `[${prefix}]: ${content}`;
+    })
+    .join("\n\n");
+
+  const prompt = `Summarize this conversation into a compact reference. This summary will be used as context for continuing the conversation.
+
+CONVERSATION (${messages.length} messages):
+${conversationText}
 
 RULES:
-1. Keep key facts, decisions, and outcomes
-2. Mention important tool results briefly
-3. Note any user preferences discovered
-4. Be concise — aim for 200-400 words
-5. Use bullet points for clarity
+1. Keep key facts, decisions, file paths, and outcomes
+2. Mention tool results briefly (what was done, not raw output)
+3. Note user preferences or style requests
+4. Be concise — max 300 words
+5. Use bullet points
 
-OUTPUT FORMAT:
-## Conversation Summary
-- [key points as bullets]
+FORMAT:
+## Summary
+- [bullet points of key information]
 
-## Decisions Made
-- [any decisions or confirmations]
+## Actions Taken
+- [what tools were used and results]
 
-## Tool Results
-- [important tool outcomes]`;
+## Status
+- [current state of whatever was being worked on]`;
 
-  try {
-    const llm = getModel();
-    
-    const result = await generateText({
-      model: llm,
-      prompt: summaryPrompt,
-    });
-    
-    const summary = result.text;
-    
-    // Create compacted message array
-    const summaryMessage: Message = {
-      role: "system",
-      content: `[CONTEXT SUMMARY - Previous ${oldMessages.length} messages compacted]\n\n${summary}`,
-      timestamp: Date.now(),
-    };
-    
-    const compactedMessages = [summaryMessage, ...recentMessages];
-    
-    const originalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
-    const newChars = compactedMessages.reduce((sum, m) => sum + m.content.length, 0);
-    
-    return {
-      messages: compactedMessages,
-      summary,
-      compacted: true,
-      originalCount: messages.length,
-      newCount: compactedMessages.length,
-      savedChars: originalChars - newChars,
-    };
-  } catch (err: any) {
-    console.error("[compaction] Failed to generate summary:", err.message);
-    
-    // Fallback: Just keep recent + simple truncation
-    const truncatedOld = oldMessages.slice(-3).map(m => ({
-      ...m,
-      content: m.content.slice(0, 200) + (m.content.length > 200 ? "..." : ""),
-    }));
-    
-    return {
-      messages: [...truncatedOld, ...recentMessages],
-      summary: null,
-      compacted: true,
-      originalCount: messages.length,
-      newCount: truncatedOld.length + recentMessages.length,
-      savedChars: 0,
-    };
-  }
-}
-
-/**
- * Smart compaction — only compact if needed
- */
-export async function smartCompact(
-  messages: Message[],
-  options?: { keepRecent?: number; model?: string }
-): Promise<CompactionResult> {
-  if (!needsCompaction(messages)) {
-    return {
-      messages,
-      summary: null,
-      compacted: false,
-      originalCount: messages.length,
-      newCount: messages.length,
-      savedChars: 0,
-    };
-  }
-  
-  return compactMessages(messages, options);
-}
-
-/**
- * Extract facts from messages (for memory)
- */
-export function extractFacts(messages: Message[]): string[] {
-  const facts: string[] = [];
-  
-  for (const msg of messages) {
-    const content = msg.content.toLowerCase();
-    
-    // User preferences
-    if (content.includes("i prefer") || content.includes("i like") || content.includes("i want")) {
-      facts.push(`User preference: ${msg.content.slice(0, 100)}`);
-    }
-    
-    // Decisions
-    if (content.includes("let's do") || content.includes("go with") || content.includes("confirmed")) {
-      facts.push(`Decision: ${msg.content.slice(0, 100)}`);
-    }
-    
-    // File operations
-    if (msg.toolName && ["file-write", "file-move", "git-commit"].includes(msg.toolName)) {
-      facts.push(`Action: ${msg.toolName} — ${msg.content.slice(0, 50)}`);
-    }
-  }
-  
-  return facts.slice(0, 10); // Max 10 facts
-}
-
-/**
- * Get compaction stats for a session
- */
-export function getCompactionStats(messages: Message[]): {
-  messageCount: number;
-  totalChars: number;
-  needsCompaction: boolean;
-  needsMemoryFlush: boolean;
-  estimatedTokens: number;
-} {
-  const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
-  
-  return {
-    messageCount: messages.length,
-    totalChars,
-    needsCompaction: needsCompaction(messages),
-    needsMemoryFlush: MEMORY_FLUSH_ENABLED && totalChars > SOFT_THRESHOLD_CHARS && totalChars < MAX_CONTEXT_CHARS,
-    estimatedTokens: Math.ceil(totalChars / 4),
-  };
-}
-
-/**
- * Memory Flush — Save durable facts before compaction
- * 
- * This is OpenClaw's safety net: before context is compacted,
- * we trigger the agent to write important info to memory files.
- */
-export async function memoryFlush(
-  messages: Message[],
-  options: {
-    sessionId?: string;
-    model?: string;
-  } = {}
-): Promise<{ flushed: boolean; facts: string[] }> {
-  if (!MEMORY_FLUSH_ENABLED) {
-    return { flushed: false, facts: [] };
-  }
-
-  const stats = getCompactionStats(messages);
-  
-  // Only flush when approaching threshold
-  if (!stats.needsMemoryFlush) {
-    return { flushed: false, facts: [] };
-  }
-
-  logger.info("compaction", "Memory flush triggered — context approaching limit");
-
-  // Extract facts to save
-  const facts = extractFacts(messages);
-  
-  if (facts.length === 0) {
-    return { flushed: false, facts: [] };
-  }
-
-  try {
-    const memory = getMemoryManager();
-    
-    // Log facts to today's daily log
-    const formattedFacts = facts.map(f => `- ${f}`).join("\n");
-    memory.logToday(`## Auto-saved from session (pre-compaction)\n\n${formattedFacts}`);
-    
-    logger.info("compaction", `Flushed ${facts.length} facts to daily log`);
-    
-    return { flushed: true, facts };
-  } catch (err) {
-    logger.error("compaction", "Memory flush failed", err);
-    return { flushed: false, facts: [] };
-  }
-}
-
-/**
- * Smart compaction with memory flush
- * 
- * Flow:
- * 1. Check if approaching limit → trigger memory flush
- * 2. Check if over limit → compact
- * 3. Return updated messages
- */
-export async function smartCompactWithFlush(
-  messages: Message[],
-  options?: { keepRecent?: number; model?: string; sessionId?: string }
-): Promise<CompactionResult & { memoryFlushed: boolean }> {
-  // Step 1: Memory flush if approaching threshold
-  const flushResult = await memoryFlush(messages, {
-    sessionId: options?.sessionId,
-    model: options?.model,
+  const llm = getModel();
+  const result = await generateText({
+    model: llm as any,
+    prompt,
+    maxOutputTokens: MAX_SUMMARY_TOKENS,
   });
 
-  // Step 2: Compact if needed
-  const compactResult = await smartCompact(messages, options);
-
-  return {
-    ...compactResult,
-    memoryFlushed: flushResult.flushed,
-  };
+  return result.text.trim();
 }
 
 /**
- * Generate memory flush prompt for agent
- * 
- * Use this to inject a system message that reminds the agent
- * to save important info before compaction.
+ * Fallback summary when LLM call fails.
+ * Just keeps the last few messages of the old batch, truncated.
  */
-export function getMemoryFlushPrompt(): string {
-  const date = new Date().toISOString().split("T")[0];
-  
-  return `[SYSTEM: Context approaching compaction threshold]
+function createFallbackSummary(messages: ContextMessage[]): string {
+  const lastFew = messages.slice(-4);
+  const lines = lastFew.map((m) => {
+    const prefix = m.role === "user" ? "User" : "Assistant";
+    return `- [${prefix}]: ${m.content.slice(0, 150)}${m.content.length > 150 ? "..." : ""}`;
+  });
 
-Before continuing, save any important information that should persist:
-1. Use memory-write to update MEMORY.md with lasting facts
-2. Use memory-log to record today's key events in memory/${date}.md
-3. Note any user preferences, decisions, or project status
+  return `## Summary (auto-truncated, ${messages.length} messages)\n${lines.join("\n")}`;
+}
 
-If nothing important to save, continue normally.`;
+// ============================================
+// FACT EXTRACTION (for memory flush)
+// ============================================
+
+function extractKeyFacts(messages: ContextMessage[]): string[] {
+  const facts: string[] = [];
+
+  for (const msg of messages) {
+    const content = msg.content;
+    const lower = content.toLowerCase();
+
+    // User preferences
+    if (lower.includes("i prefer") || lower.includes("i like") || lower.includes("i want") || lower.includes("mujhe")) {
+      facts.push(`Preference: ${content.slice(0, 120)}`);
+    }
+
+    // Decisions
+    if (lower.includes("let's do") || lower.includes("go with") || lower.includes("confirmed") || lower.includes("theek hai") || lower.includes("done")) {
+      if (msg.role === "user") {
+        facts.push(`Decision: ${content.slice(0, 120)}`);
+      }
+    }
+
+    // File paths mentioned
+    const pathMatch = content.match(/[A-Z]:\\[^\s"',]+|\/[a-z][^\s"',]+/i);
+    if (pathMatch && msg.role === "assistant") {
+      facts.push(`Path mentioned: ${pathMatch[0]}`);
+    }
+
+    // Errors encountered
+    if (lower.includes("error") || lower.includes("failed") || lower.includes("fix")) {
+      if (msg.role === "assistant" && content.length < 200) {
+        facts.push(`Issue: ${content.slice(0, 120)}`);
+      }
+    }
+  }
+
+  // Deduplicate and limit
+  const unique = [...new Set(facts)];
+  return unique.slice(0, 10);
+}
+
+// ============================================
+// STATS (for dashboard/API)
+// ============================================
+
+export function getCompactionStats(messages: ContextMessage[]): {
+  messageCount: number;
+  estimatedTokens: number;
+  needsCompaction: boolean;
+  threshold: number;
+} {
+  const tokens = estimateMessagesTokens(messages);
+  return {
+    messageCount: messages.length,
+    estimatedTokens: tokens,
+    needsCompaction: messages.length >= MIN_MESSAGES_FOR_COMPACTION && tokens >= TOKEN_THRESHOLD,
+    threshold: TOKEN_THRESHOLD,
+  };
 }

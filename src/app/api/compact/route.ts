@@ -1,115 +1,73 @@
 /**
  * Context Compaction API
  * 
- * POST /api/compact — Compact a session's messages
- * GET /api/compact?sessionId=xxx — Check if compaction needed
+ * GET /api/compact?sessionId=xxx — Check compaction stats for a session
+ * POST /api/compact — Force compact a session's context
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, getMessages, clearMessages, addMessage } from "@/lib/session-manager";
+import { getSession, getRecentMessages } from "@/lib/session-manager";
 import {
-  smartCompact,
+  compactIfNeeded,
   getCompactionStats,
-  extractFacts,
-  type Message,
+  type ContextMessage,
 } from "@/lib/context-compaction";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sessionId = searchParams.get("sessionId");
-  
+
   if (!sessionId) {
-    return NextResponse.json(
-      { error: "sessionId required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "sessionId required" }, { status: 400 });
   }
-  
+
   const session = await getSession(sessionId);
   if (!session) {
-    return NextResponse.json(
-      { error: "Session not found" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
-  
-  const rawMessages = await getMessages(sessionId);
-  const messages: Message[] = rawMessages.map((m: any) => ({
-    role: m.role,
+
+  const rawMessages = await getRecentMessages(sessionId, 50);
+  const messages: ContextMessage[] = rawMessages.map((m) => ({
+    role: m.role as "user" | "assistant" | "system",
     content: m.content,
-    timestamp: m.timestamp,
   }));
-  
+
   const stats = getCompactionStats(messages);
-  
-  return NextResponse.json({
-    sessionId,
-    ...stats,
-  });
+  return NextResponse.json({ sessionId, ...stats });
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { sessionId, keepRecent, extractMemory } = body;
-    
+    const { sessionId } = body;
+
     if (!sessionId) {
-      return NextResponse.json(
-        { error: "sessionId required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "sessionId required" }, { status: 400 });
     }
-    
+
     const session = await getSession(sessionId);
     if (!session) {
-      return NextResponse.json(
-        { error: "Session not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
-    
-    const rawMessages = await getMessages(sessionId);
-    const messages: Message[] = rawMessages.map((m: any) => ({
-      role: m.role,
+
+    const rawMessages = await getRecentMessages(sessionId, 50);
+    const messages: ContextMessage[] = rawMessages.map((m) => ({
+      role: m.role as "user" | "assistant" | "system",
       content: m.content,
-      timestamp: m.timestamp,
     }));
-    
-    // Compact
-    const result = await smartCompact(messages, { keepRecent });
-    
-    // Extract facts for memory (optional)
-    let facts: string[] = [];
-    if (extractMemory) {
-      facts = extractFacts(messages);
-    }
-    
-    // Update session if compacted
-    if (result.compacted) {
-      // Clear old messages and add compacted ones
-      await clearMessages(sessionId);
-      for (const msg of result.messages) {
-        await addMessage(sessionId, {
-          role: msg.role as "user" | "assistant" | "system",
-          content: msg.content,
-          timestamp: msg.timestamp || Date.now(),
-        });
-      }
-    }
-    
+
+    const result = await compactIfNeeded(messages, sessionId);
+
     return NextResponse.json({
       success: true,
       compacted: result.compacted,
       originalCount: result.originalCount,
       newCount: result.newCount,
-      savedChars: result.savedChars,
-      summary: result.summary,
-      facts: extractMemory ? facts : undefined,
+      savedTokens: result.savedTokens,
+      factsFlushed: result.factsFlushed,
+      hasSummary: !!result.summary,
     });
   } catch (err: any) {
-    return NextResponse.json(
-      { error: err.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

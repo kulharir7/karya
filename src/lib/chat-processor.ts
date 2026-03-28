@@ -29,6 +29,7 @@ import { getRelevantLessons, runSelfReview } from "@/lib/self-improving";
 import { getActivePluginSkills, matchPlugins, loadPluginSkill } from "@/lib/plugin-registry";
 // Import audit-log to auto-register event bus hooks (side effect import)
 import "@/lib/audit-log";
+import { compactIfNeeded, type ContextMessage } from "@/lib/context-compaction";
 
 // ============================================
 // TYPES
@@ -398,7 +399,17 @@ export async function processChat(
 
   const workspaceContext = getWorkspaceContext();
 
-  const recentMessages = await getRecentMessages(sessionId, contextWindow);
+  const rawMessages = await getRecentMessages(sessionId, contextWindow);
+
+  // ---- 3.1: Context compaction (summarize old messages if too long) ----
+  const chatHistory: ContextMessage[] = rawMessages.slice(0, -1).map((m) => ({
+    role: m.role as "user" | "assistant" | "system",
+    content: m.content,
+  }));
+
+  const compactionResult = await compactIfNeeded(chatHistory, sessionId);
+  const compactedHistory = compactionResult.messages;
+
   const contextMessages: any[] = [];
 
   // Workspace context as system message
@@ -447,13 +458,8 @@ export async function processChat(
     }
   }
 
-  // Chat history (excluding current message — we add it below with images)
-  contextMessages.push(
-    ...recentMessages.slice(0, -1).map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    }))
-  );
+  // Chat history (compacted if long, excluding current message)
+  contextMessages.push(...compactedHistory);
 
   // Current user message (with images if present)
   if (images && images.length > 0) {
