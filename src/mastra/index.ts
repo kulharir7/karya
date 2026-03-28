@@ -1,5 +1,4 @@
 import { Mastra } from "@mastra/core";
-import { Workspace, LocalFilesystem, LocalSandbox } from "@mastra/core/workspace";
 import { LibSQLStore } from "@mastra/libsql";
 import * as path from "path";
 import { supervisorAgent } from "./agents/supervisor";
@@ -32,21 +31,23 @@ const storage = new LibSQLStore({
   url: `file:${path.join(process.cwd(), "data", "karya-memory.db")}`,
 });
 
-// Workspace — gives agents filesystem + sandbox + skills
-const workspace = new Workspace({
-  filesystem: new LocalFilesystem({
-    basePath: path.join(process.cwd(), "workspace"),
-  }),
-  sandbox: new LocalSandbox({
-    workingDirectory: process.cwd(),
-  }),
-  skills: [path.join(process.cwd(), "workspace", "plugins")],
-});
+// Workspace — lazy init to avoid Turbopack issues
+let workspace: any = undefined;
+try {
+  const { Workspace, LocalFilesystem, LocalSandbox } = require("@mastra/core/workspace");
+  workspace = new Workspace({
+    filesystem: new LocalFilesystem({ basePath: path.join(process.cwd(), "workspace") }),
+    sandbox: new LocalSandbox({ workingDirectory: process.cwd() }),
+    skills: [path.join(process.cwd(), "workspace", "plugins")],
+  });
+} catch {
+  // Workspace not available in this environment
+}
 
 // Register ALL agents AND workflows with Mastra
 export const mastra = new Mastra({
   storage,
-  workspace,
+  ...(workspace ? { workspace } : {}),
   agents: {
     karya: supervisorAgent,          // Main orchestrator (default)
     "karya-browser": browserAgent,   // Web browsing specialist

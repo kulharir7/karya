@@ -64,7 +64,7 @@ function getGreeting(): string {
 
 export default function WelcomeScreen({ onSend }: { onSend: (text: string) => void }) {
   const [activeTab, setActiveTab] = useState(0);
-  const [greeting, setGreeting] = useState("");
+  const [greeting, setGreeting] = useState("Hey there! 👋");
 
   useEffect(() => { setGreeting(getGreeting()); }, []);
 

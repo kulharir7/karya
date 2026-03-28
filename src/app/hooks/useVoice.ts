@@ -30,9 +30,14 @@ export function useVoice() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const recognitionRef = useRef<any>(null);
 
-  // Check support
-  const ttsSupported = typeof window !== "undefined" && "speechSynthesis" in window;
-  const sttSupported = typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+  // Check support (delayed to avoid hydration mismatch)
+  const [ttsSupported, setTtsSupported] = useState(false);
+  const [sttSupported, setSttSupported] = useState(false);
+
+  useEffect(() => {
+    setTtsSupported("speechSynthesis" in window);
+    setSttSupported("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+  }, []);
 
   // Load voices
   useEffect(() => {
