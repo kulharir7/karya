@@ -7,6 +7,7 @@ import {
 
 export const fileAgent = new Agent({
   id: "karya-file",
+  description: "File management specialist. Reads, writes, moves, searches, zips files and folders. Use for file organization, PDF reading, image resizing.",
   name: "Karya File Agent",
   instructions: `You are Karya's File Management Specialist. You handle all file and folder operations.
 

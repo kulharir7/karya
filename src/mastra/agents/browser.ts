@@ -4,6 +4,7 @@ import { navigateTool, actTool, extractTool, screenshotTool, webSearchTool, brow
 
 export const browserAgent = new Agent({
   id: "karya-browser",
+  description: "Web browsing specialist. Navigates websites, clicks buttons, fills forms, extracts data, takes screenshots. Use for any task involving real browser interaction.",
   name: "Karya Browser Agent",
   instructions: `You are Karya's Browser Specialist. You control a real Chromium browser via Stagehand.
 

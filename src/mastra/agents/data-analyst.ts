@@ -7,6 +7,7 @@ import { codeExecuteTool } from "../tools/code";
 
 export const dataAnalystAgent = new Agent({
   id: "karya-data-analyst",
+  description: "Data analysis specialist. Parses CSV/JSON, queries data, transforms datasets, calls APIs. Use for data processing, statistics, and API interactions.",
   name: "Karya Data Analyst Agent",
   instructions: `You are Karya's Data Analysis Specialist. You process, transform, and analyze data.
 

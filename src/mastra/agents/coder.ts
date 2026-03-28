@@ -6,6 +6,7 @@ import { executeCommandTool } from "../tools/shell";
 
 export const coderAgent = new Agent({
   id: "karya-coder",
+  description: "Programming specialist. Writes code, executes scripts, analyzes files, manages git. Use for coding tasks, debugging, and software development.",
   name: "Karya Coder Agent",
   instructions: `You are Karya's Programming Specialist. You write, execute, and analyze code.
 

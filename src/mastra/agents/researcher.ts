@@ -9,6 +9,7 @@ import {
 
 export const researcherAgent = new Agent({
   id: "karya-researcher",
+  description: "Research and information specialist. Searches the web, extracts data from pages, synthesizes findings. Use for research, fact-checking, and information gathering.",
   name: "Karya Researcher Agent",
   instructions: `You are Karya's Research Specialist. You find, analyze, and synthesize information.
 

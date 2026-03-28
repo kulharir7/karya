@@ -4,6 +4,13 @@ import { createBasicMemory, getBestMemory } from "@/lib/semantic-memory";
 import { initWorkspace } from "@/lib/memory-engine";
 import { logger } from "@/lib/logger";
 
+// Import subagents for Mastra supervisor delegation
+import { browserAgent } from "./browser";
+import { fileAgent } from "./file";
+import { coderAgent } from "./coder";
+import { researcherAgent } from "./researcher";
+import { dataAnalystAgent } from "./data-analyst";
+
 // Create memory instance — start with basic, async upgrade to best available
 let memory = createBasicMemory();
 let memoryUpgraded = false;
@@ -43,8 +50,6 @@ import {
 } from "../tools/memory";
 import { scheduleTaskTool, listTasksTool, cancelTaskTool } from "../tools/scheduler";
 import {
-  delegateToBrowserAgent, delegateToFileAgent, delegateToCoderAgent,
-  delegateToResearcherAgent, delegateToDataAnalystAgent,
   passContextToAgent, agentHandoffTool, codeReviewTool,
 } from "../tools/agents";
 import { createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusTool } from "../tools/planning";
@@ -390,6 +395,14 @@ User: "todo app banao"
 This is CRITICAL for good UX — don't pollute user's workspace with unnecessary files!`,
   model: getModelForAgent(),
   memory,
+  // Mastra supervisor delegation — subagents auto-available via their descriptions
+  agents: {
+    browserAgent,
+    fileAgent,
+    coderAgent,
+    researcherAgent,
+    dataAnalystAgent,
+  },
   tools: {
     // Browser
     navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool,
@@ -412,10 +425,9 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
     memoryRecallTool, // RAG/semantic search across conversations
     // Scheduler
     scheduleTaskTool, listTasksTool, cancelTaskTool,
-    // Agent Delegation (Supervisor Pattern)
-    delegateToBrowserAgent, delegateToFileAgent, delegateToCoderAgent,
-    delegateToResearcherAgent, delegateToDataAnalystAgent,
+    // Agent Communication (pass-context + handoff kept for manual control)
     passContextToAgent, agentHandoffTool, codeReviewTool,
+    // NOTE: delegate-*-agent tools REMOVED — Mastra supervisor `agents: {}` handles delegation natively
     // Planning (Point 5)
     createPlanTool, executePlanStepTool, reviewOutputTool, getPlanStatusTool,
     // Error Recovery (Point 7)
