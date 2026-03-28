@@ -219,10 +219,17 @@ function getCustomProvider(baseURL: string, apiKey: string, name: string) {
     return cachedCustomProvider;
   }
 
+  // Ollama Cloud uses Bearer token auth, not OpenAI-style API key
+  const isOllamaCloud = baseURL.includes("ollama.com");
+  
   cachedCustomProvider = createOpenAICompatible({
     name,
     baseURL,
     apiKey: apiKey || "none",
+    // Ollama Cloud needs Authorization: Bearer <token>
+    headers: isOllamaCloud ? {
+      "Authorization": `Bearer ${apiKey}`,
+    } : undefined,
   });
   cachedCustomKey = key;
   return cachedCustomProvider;
