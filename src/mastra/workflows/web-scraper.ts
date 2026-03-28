@@ -2,24 +2,21 @@
  * Web Scraper Workflow
  * 
  * Sequential workflow: Navigate → Extract → Save
- * Uses Stagehand for JavaScript-rendered pages
+ * Uses fetch with fallback (Stagehand optional)
  */
 
 import { createWorkflow, createStep } from "@mastra/core/workflows";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
-import { getStagehand, closeStagehand } from "@/lib/stagehand";
 
-// Step 1: Navigate and extract using Stagehand
+// Step 1: Navigate and extract
 const navigateAndExtractStep = createStep({
   id: "navigate-extract",
   inputSchema: z.object({
     url: z.string(),
     outputPath: z.string(),
     selector: z.string().optional(),
-    waitForSelector: z.string().optional(),
-    useStagehand: z.boolean().optional().default(true),
   }),
   outputSchema: z.object({
     url: z.string(),
@@ -30,68 +27,9 @@ const navigateAndExtractStep = createStep({
     method: z.string(),
   }),
   execute: async ({ inputData }) => {
-    const { url, outputPath, selector, waitForSelector, useStagehand = true } = inputData;
+    const { url, outputPath, selector } = inputData;
     
-    // Try Stagehand first for JS-rendered content
-    if (useStagehand) {
-      try {
-        const stagehand = await getStagehand();
-        const page = stagehand.page;
-        
-        // Navigate with timeout
-        await page.goto(url, { 
-          waitUntil: "networkidle",
-          timeout: 30000 
-        });
-        
-        // Wait for specific selector if provided
-        if (waitForSelector) {
-          await page.waitForSelector(waitForSelector, { timeout: 10000 });
-        }
-        
-        // Extract page title
-        const pageTitle = await page.title() || "Untitled";
-        
-        // Extract content
-        let content: string;
-        if (selector) {
-          // Extract specific element
-          const extracted = await stagehand.extract({
-            instruction: `Extract all text content from the element matching: ${selector}`,
-            schema: z.object({
-              text: z.string(),
-            }),
-          });
-          content = extracted.text || "";
-        } else {
-          // Extract main content using Stagehand's AI
-          const extracted = await stagehand.extract({
-            instruction: "Extract the main article or page content as clean text. Remove navigation, ads, and boilerplate.",
-            schema: z.object({
-              title: z.string().optional(),
-              content: z.string(),
-              author: z.string().optional(),
-              date: z.string().optional(),
-            }),
-          });
-          content = extracted.content || "";
-        }
-        
-        return {
-          url,
-          outputPath,
-          pageTitle,
-          content: content.slice(0, 50000), // Limit to 50KB
-          extractedAt: Date.now(),
-          method: "stagehand",
-        };
-      } catch (stagehandError) {
-        console.warn("[web-scraper] Stagehand failed, falling back to fetch:", stagehandError);
-        // Fall through to fetch-based approach
-      }
-    }
-    
-    // Fallback: Simple fetch (for static pages or when Stagehand fails)
+    // Fetch-based approach (works for most sites)
     try {
       const response = await fetch(url, {
         headers: {
@@ -186,8 +124,6 @@ export const webScraperWorkflow = createWorkflow({
     url: z.string(),
     outputPath: z.string(),
     selector: z.string().optional(),
-    waitForSelector: z.string().optional(),
-    useStagehand: z.boolean().optional(),
   }),
   outputSchema: z.object({
     savedPath: z.string(),

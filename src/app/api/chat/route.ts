@@ -1,215 +1,36 @@
+/**
+ * POST /api/chat — Original SSE chat endpoint (backward compatible)
+ * 
+ * Now uses the shared ChatProcessor instead of inline logic.
+ * The v1 API also uses the same processor, ensuring consistency.
+ */
+
 import { NextRequest } from "next/server";
-import "dotenv/config";
-import { getMCPToolsets } from "@/mastra/mcp/client";
-import {
-  addMessage,
-  getRecentMessages,
-  ensureDefaultSession,
-  getSession,
-  createSession,
-  renameSession,
-} from "@/lib/session-manager";
-import { eventBus } from "@/lib/event-bus";
-import { getWorkspaceContext, initWorkspace, logToDaily } from "@/lib/memory-engine";
-// Agent routing is now handled by the supervisor agent itself via tool calling
-// (Supervisor Pattern from "Principles of Building AI Agents" book)
-// The supervisor has delegate-*-agent tools and decides which specialist to call
-
-// Cache MCP tools for 60 seconds
-let mcpToolsCache: { tools: Record<string, any>; timestamp: number } = { tools: {}, timestamp: 0 };
-const MCP_CACHE_TTL = 60_000;
-
-async function getAgent() {
-  const { mastra } = await import("@/mastra");
-  // Always use supervisor — it delegates to specialists via tools
-  return mastra.getAgent("karya");
-}
-
-async function getCachedMCPToolsets(): Promise<Record<string, any>> {
-  const now = Date.now();
-  if (now - mcpToolsCache.timestamp < MCP_CACHE_TTL && Object.keys(mcpToolsCache.tools).length > 0) {
-    return mcpToolsCache.tools;
-  }
-  try {
-    const toolsets = await getMCPToolsets();
-    mcpToolsCache = { tools: toolsets, timestamp: now };
-    return toolsets;
-  } catch {
-    return mcpToolsCache.tools;
-  }
-}
-
-// Map Mastra variable names → tool IDs for display
-const TOOL_NAME_MAP: Record<string, string> = {
-  navigateTool: "browser-navigate", actTool: "browser-act",
-  extractTool: "browser-extract", screenshotTool: "browser-screenshot",
-  webSearchTool: "web-search", readFileTool: "file-read",
-  writeFileTool: "file-write", listFilesTool: "file-list",
-  moveFileTool: "file-move", searchFilesTool: "file-search",
-  readPdfTool: "file-read-pdf", resizeImageTool: "file-resize-image",
-  zipFilesTool: "file-zip", unzipFilesTool: "file-unzip",
-  executeCommandTool: "shell-execute", systemInfoTool: "system-info",
-  clipboardReadTool: "clipboard-read", clipboardWriteTool: "clipboard-write",
-  notifyTool: "system-notify", browserAgentTool: "browser-agent",
-  systemScreenshotTool: "system-screenshot",
-  analyzeImageTool: "analyze-image",
-  batchRenameTool: "file-batch-rename", fileSizeTool: "file-size-info",
-  dateTimeTool: "system-datetime", processListTool: "system-processes",
-  openAppTool: "system-open-app", killProcessTool: "system-kill-process",
-  codeWriteTool: "code-write", codeExecuteTool: "code-execute",
-  codeAnalyzeTool: "code-analyze", apiCallTool: "api-call",
-  csvParseTool: "data-csv-parse", jsonQueryTool: "data-json-query",
-  dataTransformTool: "data-transform",
-  memorySearchTool: "memory-search",
-  memoryReadTool: "memory-read",
-  memoryWriteTool: "memory-write",
-  memoryLogTool: "memory-log",
-  memoryListTool: "memory-list",
-  memoryRecallTool: "memory-recall",
-  scheduleTaskTool: "task-schedule",
-  listTasksTool: "task-list",
-  cancelTaskTool: "task-cancel",
-  delegateToBrowserAgent: "delegate-browser-agent",
-  delegateToFileAgent: "delegate-file-agent",
-  delegateToCoderAgent: "delegate-coder-agent",
-  delegateToResearcherAgent: "delegate-researcher-agent",
-  delegateToDataAnalystAgent: "delegate-data-analyst-agent",
-  passContextToAgent: "pass-context",
-  agentHandoffTool: "agent-handoff",
-  codeReviewTool: "code-review",
-  // Planning
-  createPlanTool: "create-plan",
-  executePlanStepTool: "execute-plan-step",
-  reviewOutputTool: "review-output",
-  getPlanStatusTool: "get-plan-status",
-  // Error Recovery
-  suggestRecoveryTool: "suggest-recovery",
-  logRecoveryTool: "log-recovery",
-  confidenceCheckTool: "confidence-check",
-  // Git
-  gitStatusTool: "git-status",
-  gitCommitTool: "git-commit",
-  gitPushTool: "git-push",
-  gitLogTool: "git-log",
-  gitDiffTool: "git-diff",
-  // Skills
-  skillListTool: "skill-list",
-  skillMatchTool: "skill-match",
-  skillLoadTool: "skill-load",
-  skillCreateTool: "skill-create",
-  // Workflows
-  workflowListTool: "workflow-list",
-  workflowRunTool: "workflow-run",
-  workflowStatusTool: "workflow-status",
-  workflowHistoryTool: "workflow-history",
-  workflowResumeTool: "workflow-resume",
-  workflowCancelTool: "workflow-cancel",
-  workflowStatsTool: "workflow-stats",
-};
-
-function resolveToolName(raw: string): string {
-  return TOOL_NAME_MAP[raw] || raw;
-}
-
-// Image attachment type for vision
-interface ImageAttachment {
-  base64: string;
-  mimeType: string;
-  name?: string;
-}
+import { processChat, type ChatRequest, type ChatEvents, type ImageAttachment } from "@/lib/chat-processor";
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, sessionId: reqSessionId, images } = await req.json() as {
+    const { message, sessionId, images } = await req.json() as {
       message: string;
       sessionId?: string;
-      images?: ImageAttachment[]; // For vision support
+      images?: ImageAttachment[];
     };
 
     if (!message) {
       return new Response(JSON.stringify({ error: "Message is required" }), {
-        status: 400, headers: { "Content-Type": "application/json" },
+        status: 400,
+        headers: { "Content-Type": "application/json" },
       });
     }
 
-    // Resolve session — server-side
-    let sessionId = reqSessionId || "default";
-    await ensureDefaultSession();
+    const chatReq: ChatRequest = {
+      message,
+      sessionId,
+      images,
+      channel: "web",
+    };
 
-    let session = await getSession(sessionId);
-    if (!session) {
-      session = await createSession("New Chat");
-      sessionId = session.id;
-    }
-
-    // Persist user message to DB
-    await addMessage(sessionId, { role: "user", content: message, timestamp: Date.now() });
-    await eventBus.emit("message:received", { sessionId, message, timestamp: Date.now() });
-
-    // Initialize workspace and get memory context
-    initWorkspace();
-    const workspaceContext = getWorkspaceContext();
-
-    // Load recent messages from DB for context
-    const recentMessages = await getRecentMessages(sessionId, 20);
-    const contextMessages: any[] = [];
-
-    // Inject workspace context as system message (like OpenClaw bootstrap)
-    if (workspaceContext) {
-      console.log("[chat] Injecting workspace context:", workspaceContext.slice(0, 500) + "...");
-      contextMessages.push({
-        role: "system",
-        content: workspaceContext,
-      });
-    }
-
-    // Add chat history (excluding the current message which we'll add with images)
-    contextMessages.push(
-      ...recentMessages.slice(0, -1).map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      }))
-    );
-
-    // Add current user message (with images if present)
-    if (images && images.length > 0) {
-      // Multimodal message format for vision models
-      const contentParts: any[] = [
-        { type: "text", text: message }
-      ];
-      
-      for (const img of images) {
-        contentParts.push({
-          type: "image",
-          image: `data:${img.mimeType};base64,${img.base64}`,
-        });
-      }
-      
-      contextMessages.push({
-        role: "user",
-        content: contentParts,
-      });
-    } else {
-      // Text-only message
-      contextMessages.push({
-        role: "user",
-        content: message,
-      });
-    }
-
-    // Auto-rename session from first user message
-    if (session.messageCount <= 1) {
-      const autoName = message.slice(0, 30) + (message.length > 30 ? "..." : "");
-      await renameSession(sessionId, autoName);
-    }
-
-    // Supervisor handles everything — delegates to specialists via tools
-    const agent = await getAgent();
     const encoder = new TextEncoder();
-
-    // Fetch MCP toolsets
-    const mcpToolsets = await getCachedMCPToolsets();
-    const mcpToolCount = Object.keys(mcpToolsets).length;
 
     const readable = new ReadableStream({
       async start(controller) {
@@ -217,106 +38,23 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
-        send({ type: "session", sessionId });
-        await eventBus.emit("agent:start", { sessionId, message });
+        const events: ChatEvents = {
+          onSession: (sid) => send({ type: "session", sessionId: sid }),
+          onTextDelta: (delta) => send({ type: "text-delta", content: delta }),
+          onToolCall: (toolName, args) => send({ type: "tool-call", toolName, args }),
+          onToolResult: (toolName, result) => send({ type: "tool-result", toolName, result }),
+          onDone: () => {
+            send({ type: "done" });
+            controller.close();
+          },
+          onError: (error) => {
+            send({ type: "error", content: error });
+            send({ type: "done" });
+            controller.close();
+          },
+        };
 
-        try {
-          const streamOptions: any = {
-            // AGENTIC LOOP: Allow agent to run multiple tool iterations
-            // This lets agent: tool1 → see result → tool2 → see result → ... → final response
-            // Without this, agent stops after first round of tools
-            maxSteps: 15, // Up to 15 tool iterations per request (complex tasks need more)
-          };
-          if (mcpToolCount > 0) {
-            streamOptions.toolsets = mcpToolsets;
-          }
-
-          // === DUAL STREAM: Real-time tools + word-by-word text (Point 52) ===
-          // Use fullStream for interleaved tool + text events
-          // This shows tool cards DURING execution, not after
-          const streamResult = await agent.stream(contextMessages, streamOptions);
-
-          let fullText = "";
-          const allToolCalls: { toolName: string; args?: any; result?: any; status: string }[] = [];
-          const pendingTools: Map<string, { toolName: string; args?: any }> = new Map();
-
-          const fullStream = (streamResult as any).fullStream;
-          for await (const event of fullStream) {
-            // Events can be wrapped in payload (Mastra) or direct
-            const ev = event?.payload || event;
-            const type = ev?.type || event?.type;
-
-            if (type === "text-delta") {
-              // Text is in payload.text (not textDelta!)
-              const delta = event?.payload?.text || event?.payload?.textDelta || ev?.text || ev?.textDelta || "";
-              if (delta) {
-                fullText += delta;
-                send({ type: "text-delta", content: delta });
-              }
-            } else if (type === "tool-call") {
-              const rawName = ev?.toolName || ev?.name || "unknown";
-              const toolName = resolveToolName(rawName);
-              const args = ev?.args || {};
-              const callId = ev?.toolCallId || rawName;
-
-              pendingTools.set(callId, { toolName, args });
-              await eventBus.emit("tool:before_call", { toolName, args });
-              send({ type: "tool-call", toolName, args });
-            } else if (type === "tool-result") {
-              const rawName = ev?.toolName || ev?.name || "unknown";
-              const toolName = resolveToolName(rawName);
-              const callId = ev?.toolCallId || rawName;
-              const result = ev?.result || null;
-
-              send({ type: "tool-result", toolName, result });
-              await eventBus.emit("tool:after_call", { toolName, result });
-
-              const pending = pendingTools.get(callId);
-              allToolCalls.push({
-                toolName,
-                args: pending?.args || {},
-                result,
-                status: "done",
-              });
-              pendingTools.delete(callId);
-            }
-            // Skip other event types (step-start, step-finish, etc.)
-          }
-
-          // Persist assistant message
-          await addMessage(sessionId, {
-            role: "assistant",
-            // If no text and no tools, likely an API error
-            content: fullText || (allToolCalls.length > 0 ? "✅ Done." : "⚠️ No response from AI. Check Settings → API keys."),
-            toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
-            timestamp: Date.now(),
-          });
-
-          // Log to daily memory
-          if (allToolCalls.length > 0) {
-            const toolNames = allToolCalls.map((t) => t.toolName).join(", ");
-            logToDaily(`Used tools: ${toolNames} | Session: ${sessionId}`);
-          }
-
-          await eventBus.emit("agent:end", { sessionId, toolCount: allToolCalls.length, textLength: fullText.length });
-          await eventBus.emit("message:sent", { sessionId, content: fullText });
-
-          send({ type: "done" });
-          controller.close();
-        } catch (err: any) {
-          console.error("Agent error:", err.message);
-          await eventBus.emit("agent:error", { sessionId, error: err.message });
-
-          await addMessage(sessionId, {
-            role: "assistant",
-            content: `❌ Error: ${err.message}`,
-            timestamp: Date.now(),
-          });
-
-          send({ type: "error", content: err.message || "Agent error" });
-          send({ type: "done" });
-          controller.close();
-        }
+        await processChat(chatReq, events);
       },
     });
 

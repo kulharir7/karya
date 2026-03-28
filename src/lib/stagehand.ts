@@ -18,17 +18,12 @@ export async function getStagehand(): Promise<Stagehand> {
       console.warn("[stagehand] No API key found. Set STAGEHAND_API_KEY, OPENAI_API_KEY, or LLM_API_KEY");
     }
 
+    // @ts-ignore - Stagehand API may vary between versions
     stagehandInstance = new Stagehand({
       env: "LOCAL",
       verbose: 1,
       localBrowserLaunchOptions: {
         headless: false,
-      },
-      model: {
-        modelName,
-        provider,
-        apiKey: apiKey || "",
-        ...(baseURL && { baseURL }),
       },
     });
     await stagehandInstance.init();

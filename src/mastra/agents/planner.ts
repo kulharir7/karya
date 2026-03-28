@@ -1,6 +1,8 @@
 import { Agent } from "@mastra/core/agent";
 import { getModel } from "@/lib/llm";
-import { memory } from "@/lib/memory";
+import { createBasicMemory } from "@/lib/semantic-memory";
+
+const memory = createBasicMemory();
 import { navigateTool, actTool, extractTool, screenshotTool, browserAgentTool } from "../tools/browser";
 import {
   readFileTool,

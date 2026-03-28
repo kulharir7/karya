@@ -12,9 +12,12 @@ import { logger } from "../lib/logger";
 // Note: Install grammy: npm install grammy
 // This is a template — actual implementation needs grammy
 
+// Type declaration for grammy (avoid TS errors when not installed)
+type Bot = any;
+
 export class TelegramBridge implements ChannelBridge {
   type: "telegram" = "telegram";
-  private bot: any = null;
+  private bot: Bot = null;
   private token: string;
   private allowedUsers: string[];
   private running = false;
@@ -29,6 +32,7 @@ export class TelegramBridge implements ChannelBridge {
 
     try {
       // Dynamic import to avoid bundling issues
+      // @ts-ignore - grammy is optional dependency
       const { Bot } = await import("grammy");
       
       this.bot = new Bot(this.token);

@@ -48,11 +48,22 @@ export type KaryaEvent =
   // Workflow events
   | "workflow:created"     // workflow run created
   | "workflow:updated"     // workflow run status updated
+  | "workflow:start"       // workflow execution started
+  | "workflow:complete"    // workflow execution completed
+  | "workflow:error"       // workflow execution failed
+  | "workflow:resume"      // workflow resumed from suspend
+  | "workflow:cancel"      // workflow cancelled
+  | "workflow:deleted"     // workflow run deleted
   // Trigger events
   | "trigger:created"      // trigger was created
   | "trigger:fired"        // trigger was fired
   | "trigger:deleted"      // trigger was deleted
-  | "workflow:deleted"     // workflow run deleted
+  // Bridge events (multi-channel)
+  | "bridge:message"       // message from external channel
+  // Heartbeat events
+  | "heartbeat:task"       // scheduled heartbeat task triggered
+  // Log events
+  | "log:error"            // error logged
   // Sub-agent events
   | "subagent:spawned"     // sub-agent spawned
   | "subagent:completed"   // sub-agent completed
