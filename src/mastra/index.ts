@@ -1,4 +1,6 @@
 import { Mastra } from "@mastra/core";
+import { LibSQLStore } from "@mastra/libsql";
+import * as path from "path";
 import { supervisorAgent } from "./agents/supervisor";
 import { browserAgent } from "./agents/browser";
 import { fileAgent } from "./agents/file";
@@ -23,8 +25,15 @@ import {
 // MCP Server — exposes all tools to external clients
 export const karyaMCPServer = createKaryaMCPServer();
 
+// Instance-level storage — shared by all agents for memory persistence
+const storage = new LibSQLStore({
+  id: "karya-storage",
+  url: `file:${path.join(process.cwd(), "data", "karya-memory.db")}`,
+});
+
 // Register ALL agents AND workflows with Mastra
 export const mastra = new Mastra({
+  storage,
   agents: {
     karya: supervisorAgent,          // Main orchestrator (default)
     "karya-browser": browserAgent,   // Web browsing specialist
