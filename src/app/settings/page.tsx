@@ -92,7 +92,12 @@ export default function SettingsPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   
   // Tab state
-  const [activeTab, setActiveTab] = useState<"model" | "security" | "plugins" | "mcp" | "about">("model");
+  const [activeTab, setActiveTab] = useState<"model" | "auth" | "security" | "plugins" | "mcp" | "about">("model");
+  
+  // Auth state
+  const [authProviders, setAuthProviders] = useState<any[]>([]);
+  const [authProfiles, setAuthProfiles] = useState<any[]>([]);
+  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   
   // Security state
   const [securityConfig, setSecurityConfig] = useState<any>(null);
@@ -101,8 +106,14 @@ export default function SettingsPage() {
   const [mcpNewUrl, setMcpNewUrl] = useState("");
   const [mcpNewName, setMcpNewName] = useState("");
   
-  // Load security + plugins on tab switch
+  // Load security + plugins + auth on tab switch
   useEffect(() => {
+    if (activeTab === "auth" && authProviders.length === 0) {
+      fetch("/api/v1/auth").then(r => r.json()).then(d => {
+        setAuthProviders(d.data?.providers || []);
+        setAuthProfiles(d.data?.profiles || []);
+      }).catch(() => {});
+    }
     if (activeTab === "security" && !securityConfig) {
       fetch("/api/v1/security?action=config").then(r => r.json()).then(d => setSecurityConfig(d.data)).catch(() => {});
     }
@@ -112,7 +123,7 @@ export default function SettingsPage() {
     if (activeTab === "mcp" && mcpServers.length === 0) {
       fetch("/api/v1/mcp/servers").then(r => r.json()).then(d => setMcpServers(d.data?.servers || d.servers || [])).catch(() => {});
     }
-  }, [activeTab, securityConfig, plugins.length, mcpServers.length]);
+  }, [activeTab, authProviders.length, securityConfig, plugins.length, mcpServers.length]);
 
   // Load config
   useEffect(() => {
@@ -187,6 +198,82 @@ export default function SettingsPage() {
     }
     
     setSaving(false);
+  };
+
+  // ════════════════════════════════════════════════════════════════
+  // AUTH TAB HANDLERS
+  // ════════════════════════════════════════════════════════════════
+  
+  const addAuthKey = async (provider: string, key: string) => {
+    setOauthLoading(provider);
+    try {
+      const res = await fetch("/api/v1/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add-key", provider, apiKey: key }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error?.message || "Failed to add key");
+      
+      // Refresh auth list
+      const refreshRes = await fetch("/api/v1/auth");
+      const refreshData = await refreshRes.json();
+      setAuthProviders(refreshData.data?.providers || []);
+      setAuthProfiles(refreshData.data?.profiles || []);
+      showSuccess();
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setOauthLoading(null);
+  };
+
+  const startOAuth = async (provider: string) => {
+    setOauthLoading(provider);
+    try {
+      const res = await fetch("/api/v1/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start-oauth", provider }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error?.message || "Failed to start OAuth");
+      
+      // Open auth URL in new window
+      const authWindow = window.open(data.data.authUrl, "_blank", "width=600,height=700");
+      
+      // Wait for callback
+      const waitRes = await fetch("/api/v1/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "wait-oauth", timeoutMs: 120000 }),
+      });
+      const waitData = await waitRes.json();
+      
+      if (waitData.ok && waitData.data?.profile) {
+        // Refresh auth list
+        const refreshRes = await fetch("/api/v1/auth");
+        const refreshData = await refreshRes.json();
+        setAuthProviders(refreshData.data?.providers || []);
+        setAuthProfiles(refreshData.data?.profiles || []);
+        showSuccess();
+      } else {
+        throw new Error(waitData.error?.message || "OAuth failed");
+      }
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setOauthLoading(null);
+  };
+
+  const removeProfile = async (profileId: string) => {
+    try {
+      await fetch("/api/v1/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove", profileId }),
+      });
+      setAuthProfiles(authProfiles.filter(p => p.id !== profileId));
+    } catch {}
   };
 
   // Save Anthropic setup token
@@ -302,12 +389,12 @@ export default function SettingsPage() {
       {/* Tabs */}
       <div className="max-w-4xl mx-auto px-6 pt-4">
         <div className="flex gap-1 border-b border-gray-200">
-          {(["model", "security", "plugins", "mcp", "about"] as const).map((tab) => (
+          {(["model", "auth", "security", "plugins", "mcp", "about"] as const).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
                 activeTab === tab ? "bg-white border border-b-white border-gray-200 -mb-px text-purple-600" : "text-gray-500 hover:text-gray-700"
               }`}>
-              {{ model: "🤖 Model", security: "🔒 Security", plugins: "🔌 Plugins", mcp: "🔗 MCP", about: "ℹ️ About" }[tab]}
+              {{ model: "🤖 Model", auth: "🔐 Auth", security: "🔒 Security", plugins: "🔌 Plugins", mcp: "🔗 MCP", about: "ℹ️ About" }[tab]}
             </button>
           ))}
         </div>
@@ -702,6 +789,181 @@ export default function SettingsPage() {
           </ul>
         </section>
         </>}
+
+        {/* ========== AUTH TAB ========== */}
+        {activeTab === "auth" && (
+          <div className="space-y-6">
+            {/* Header */}
+            <section className="bg-gradient-to-r from-purple-500/10 to-indigo-500/10 rounded-xl border border-purple-200 p-6">
+              <h2 className="text-lg font-semibold mb-2">🔐 Authentication</h2>
+              <p className="text-sm text-gray-600">
+                Connect your AI provider accounts. Login with OAuth or paste API keys.
+              </p>
+            </section>
+
+            {/* Providers */}
+            <section className="bg-white rounded-xl border p-6">
+              <h3 className="text-md font-semibold mb-4">AI Providers</h3>
+              
+              <div className="space-y-4">
+                {authProviders.map((provider) => (
+                  <div key={provider.id} 
+                    className={`p-4 rounded-xl border-2 transition-all ${
+                      provider.configured 
+                        ? "border-green-200 bg-green-50/50" 
+                        : "border-gray-200 hover:border-purple-200"
+                    }`}>
+                    <div className="flex items-center justify-between">
+                      {/* Provider Info */}
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${provider.color} flex items-center justify-center text-white text-lg shadow-sm`}>
+                          {provider.icon}
+                        </div>
+                        <div>
+                          <div className="font-medium">{provider.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {provider.configured ? (
+                              <span className="text-green-600 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                Connected via {provider.source}
+                              </span>
+                            ) : (
+                              "Not configured"
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        {provider.configured ? (
+                          <>
+                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                              ✓ Active
+                            </span>
+                            <button
+                              onClick={() => {
+                                if (provider.activeProfile) {
+                                  removeProfile(provider.activeProfile);
+                                }
+                              }}
+                              className="text-xs text-red-500 hover:text-red-700 px-2 py-1"
+                            >
+                              Disconnect
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {provider.authMethod === "oauth" && (
+                              <button
+                                onClick={() => startOAuth(provider.id)}
+                                disabled={oauthLoading === provider.id}
+                                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
+                              >
+                                {oauthLoading === provider.id ? (
+                                  <>
+                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                    Connecting...
+                                  </>
+                                ) : (
+                                  <>🔗 Login with {provider.name.split(" ")[0]}</>
+                                )}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setShowAuthModal(provider.id);
+                                setApiKeyInput("");
+                              }}
+                              className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-all"
+                            >
+                              🔑 Add API Key
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Instructions (collapsed) */}
+                    {!provider.configured && provider.instructions && (
+                      <details className="mt-3">
+                        <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                          📖 How to get credentials
+                        </summary>
+                        <pre className="mt-2 p-3 bg-gray-50 rounded-lg text-xs text-gray-600 whitespace-pre-wrap">
+                          {provider.instructions}
+                        </pre>
+                        {provider.consoleUrl && (
+                          <a 
+                            href={provider.consoleUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800"
+                          >
+                            🔗 Open {provider.name.split(" ")[0]} Console →
+                          </a>
+                        )}
+                      </details>
+                    )}
+                  </div>
+                ))}
+
+                {authProviders.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <span className="text-4xl">🔑</span>
+                    <p className="mt-2">Loading providers...</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Connected Profiles */}
+            {authProfiles.length > 0 && (
+              <section className="bg-white rounded-xl border p-6">
+                <h3 className="text-md font-semibold mb-4">Connected Accounts</h3>
+                <div className="space-y-2">
+                  {authProfiles.map((profile) => (
+                    <div key={profile.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">
+                          {profile.type === "oauth" ? "🔗" : "🔑"}
+                        </span>
+                        <div>
+                          <div className="text-sm font-medium">{profile.id}</div>
+                          <div className="text-xs text-gray-500">
+                            {profile.email || profile.provider} • {profile.type}
+                            {profile.expiresAt && (
+                              <span className="ml-2">
+                                Expires: {new Date(profile.expiresAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => removeProfile(profile.id)}
+                        className="text-xs text-red-500 hover:text-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Tips */}
+            <section className="bg-blue-50 rounded-xl border border-blue-100 p-4">
+              <h4 className="text-sm font-semibold text-blue-800 mb-2">💡 Tips</h4>
+              <ul className="text-xs text-blue-700 space-y-1">
+                <li>• <strong>OAuth</strong> — Best option, uses your existing account (Google)</li>
+                <li>• <strong>API Key</strong> — Works for all providers, paste from console</li>
+                <li>• <strong>Environment vars</strong> — Set ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.</li>
+                <li>• Profiles are stored locally in <code className="bg-blue-100 px-1 rounded">auth-profiles.json</code></li>
+              </ul>
+            </section>
+          </div>
+        )}
 
         {/* ========== SECURITY TAB ========== */}
         {activeTab === "security" && (
