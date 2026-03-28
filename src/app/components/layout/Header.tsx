@@ -111,19 +111,19 @@ export default function Header({
 
       {/* Right: Actions */}
       <div className="flex items-center gap-1 shrink-0">
-        {/* Model badge */}
-        <span className="hidden lg:flex text-[9px] text-[var(--text-muted)] bg-[var(--bg-tertiary)] px-2 py-1 rounded-md border border-[var(--border)] font-mono mr-1">
+        {/* Model badge — hidden on mobile */}
+        <span className="hidden lg:flex header-model-badge text-[9px] text-[var(--text-muted)] bg-[var(--bg-tertiary)] px-2 py-1 rounded-md border border-[var(--border)] font-mono mr-1">
           gpt-oss:120b
         </span>
 
         {/* Session switcher */}
         <select value={activeId} onChange={(e) => onSwitchSession(e.target.value)}
-          className="text-[11px] bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-2 py-1 text-[var(--text-secondary)] focus:outline-none focus:border-purple-400 max-w-[120px] truncate">
+          className="text-[11px] bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-2 py-1 text-[var(--text-secondary)] focus:outline-none focus:border-purple-400 max-w-[120px] sm:max-w-[140px] truncate">
           {sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
 
-        {/* Export */}
-        <button onClick={onExportChat} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors" title="Export chat">
+        {/* Export — hidden on small mobile */}
+        <button onClick={onExportChat} className="hidden sm:block header-export-btn p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors" title="Export chat">
           {icons.export}
         </button>
 

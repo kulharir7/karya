@@ -98,7 +98,7 @@ export default function ChatInput({ isLoading, onSend, onCancel }: ChatInputProp
 
   return (
     <div
-      className={`border-t bg-[var(--bg-secondary)] p-3 shrink-0 transition-colors ${
+      className={`border-t bg-[var(--bg-secondary)] p-3 shrink-0 transition-colors chat-input-wrapper ${
         dragging ? "border-purple-400 bg-purple-500/5" : "border-[var(--border)]"
       }`}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}

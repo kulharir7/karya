@@ -104,7 +104,7 @@ export default function WelcomeScreen({ onSend }: { onSend: (text: string) => vo
       </div>
 
       {/* Examples grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-2xl w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-w-2xl w-full">
         {CATEGORIES[activeTab].examples.map((ex, i) => (
           <button
             key={i}
