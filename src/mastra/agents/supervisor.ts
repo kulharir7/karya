@@ -1,6 +1,6 @@
 import { Agent } from "@mastra/core/agent";
+import { Memory } from "@mastra/memory";
 import { getModelForAgent } from "@/lib/model-router";
-import { createBasicMemory, getBestMemory } from "@/lib/semantic-memory";
 import { initWorkspace } from "@/lib/memory-engine";
 import { logger } from "@/lib/logger";
 
@@ -11,23 +11,32 @@ import { coderAgent } from "./coder";
 import { researcherAgent } from "./researcher";
 import { dataAnalystAgent } from "./data-analyst";
 
-// Create memory instance — start with basic, async upgrade to best available
-let memory = createBasicMemory();
-let memoryUpgraded = false;
-
-// Async upgrade to best available (OpenAI > FastEmbed > Basic)
-(async () => {
-  try {
-    memory = await getBestMemory();
-    memoryUpgraded = true;
-    logger.info("supervisor", "Memory initialized with best available embeddings");
-  } catch (err) {
-    logger.warn("supervisor", "Memory upgrade failed, using basic memory", err);
-  }
-})();
-
 // Ensure workspace exists with default files on startup
 initWorkspace();
+
+// ============================================
+// MASTRA MEMORY (proper, all features)
+// ============================================
+
+const memory = new Memory({
+  options: {
+    // Message history — keep last 20 messages in context
+    lastMessages: 20,
+
+    // Working Memory — persistent scratchpad for user info
+    // Agent can store names, preferences, goals across conversations
+    workingMemory: {
+      enabled: true,
+      scope: "resource", // Persists across all threads for same user
+    },
+
+    // Semantic Recall — RAG-based search for relevant past messages
+    // Disabled by default (needs vector embeddings), enable with embedder
+    semanticRecall: false,
+  },
+});
+
+logger.info("supervisor", "Memory initialized: history(20) + workingMemory + semanticRecall(off)");
 
 // Import ALL tools from all categories
 import { navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool } from "../tools/browser";
