@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getModel } from "@/lib/llm";
+import { getModelForAgent } from "@/lib/model-router";
 import { navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool } from "../tools/browser";
 
 export const browserAgent = new Agent({
@@ -33,7 +33,7 @@ export const browserAgent = new Agent({
 - "Search flights Delhi to Mumbai" → navigate to MakeMyTrip → act to fill form → extract results
 - "Get Amazon price for iPhone 16" → navigate → act to search → extract price
 - "Fill this Google Form" → navigate → act to fill each field → act to submit`,
-  model: getModel(),
+  model: getModelForAgent(),
   tools: {
     navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool,
   },

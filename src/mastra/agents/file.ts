@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getModel } from "@/lib/llm";
+import { getModelForAgent } from "@/lib/model-router";
 import {
   readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool,
   readPdfTool, resizeImageTool, zipFilesTool, unzipFilesTool, batchRenameTool, fileSizeTool,
@@ -39,7 +39,7 @@ export const fileAgent = new Agent({
 - For PDFs: extract text, report page count
 - For images: report dimensions and size after resize
 - Reply in user's language`,
-  model: getModel(),
+  model: getModelForAgent(),
   tools: {
     readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool,
     readPdfTool, resizeImageTool, zipFilesTool, unzipFilesTool, batchRenameTool, fileSizeTool,

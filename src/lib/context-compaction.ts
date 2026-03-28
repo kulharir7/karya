@@ -24,7 +24,7 @@
  */
 
 import { generateText } from "ai";
-import { getModel } from "./llm";
+import { getModelForAgent } from "./model-router";
 import { logToDaily } from "./memory-engine";
 import { logger } from "./logger";
 
@@ -205,7 +205,7 @@ FORMAT:
 ## Status
 - [current state of whatever was being worked on]`;
 
-  const llm = getModel();
+  const llm = getModelForAgent();
   const result = await generateText({
     model: llm as any,
     prompt,

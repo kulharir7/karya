@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getModel } from "@/lib/llm";
+import { getModelForAgent } from "@/lib/model-router";
 import { createBasicMemory } from "@/lib/semantic-memory";
 
 const memory = createBasicMemory();
@@ -95,7 +95,7 @@ User: "Downloads mein sab PDF dhundho"
 
 User: "MakeMyTrip pe Delhi to Mumbai flight check karo"
 → Call browser-navigate to makemytrip.com → Call browser-act to fill search → Call browser-extract for results`,
-  model: getModel(),
+  model: getModelForAgent(),
   memory,
   tools: {
     navigateTool,

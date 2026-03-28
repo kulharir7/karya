@@ -1,0 +1,18 @@
+[
+  {
+    "timestamp": 1774688898619,
+    "task": "mereliye linkdin pe job dekho",
+    "quality": 6,
+    "outcome": "partial",
+    "toolCount": 1,
+    "durationMs": 26938
+  },
+  {
+    "timestamp": 1774689095820,
+    "task": "broser open kr ke dekh lo",
+    "quality": 6,
+    "outcome": "partial",
+    "toolCount": 3,
+    "durationMs": 109020
+  }
+]

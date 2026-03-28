@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getModel } from "@/lib/llm";
+import { getModelForAgent } from "@/lib/model-router";
 import { webSearchTool, navigateTool, extractTool, screenshotTool } from "../tools/browser";
 import { writeFileTool } from "../tools/file";
 import { apiCallTool } from "../tools/data";
@@ -43,7 +43,7 @@ export const researcherAgent = new Agent({
 - For technical research: include code examples if relevant
 - Check memory first — maybe we already researched this
 - Reply in user's language`,
-  model: getModel(),
+  model: getModelForAgent(),
   tools: {
     webSearchTool, navigateTool, extractTool, screenshotTool,
     writeFileTool, apiCallTool,

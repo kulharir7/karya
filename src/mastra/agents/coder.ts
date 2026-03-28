@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getModel } from "@/lib/llm";
+import { getModelForAgent } from "@/lib/model-router";
 import { codeWriteTool, codeExecuteTool, codeAnalyzeTool } from "../tools/code";
 import { readFileTool, writeFileTool, listFilesTool, searchFilesTool } from "../tools/file";
 import { executeCommandTool } from "../tools/shell";
@@ -39,7 +39,7 @@ export const coderAgent = new Agent({
 - Never expose secrets/API keys in code
 - Reply in user's language
 - Return results clearly — show code, output, and explanation`,
-  model: getModel(),
+  model: getModelForAgent(),
   tools: {
     codeWriteTool, codeExecuteTool, codeAnalyzeTool,
     readFileTool, writeFileTool, listFilesTool, searchFilesTool,

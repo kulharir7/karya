@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getModel } from "@/lib/llm";
+import { getModelForAgent } from "@/lib/model-router";
 import { createBasicMemory, getBestMemory } from "@/lib/semantic-memory";
 import { initWorkspace } from "@/lib/memory-engine";
 import { logger } from "@/lib/logger";
@@ -388,7 +388,7 @@ User: "todo app banao"
 - "explain how HTML works" → Reply with text. NO file.
 
 This is CRITICAL for good UX — don't pollute user's workspace with unnecessary files!`,
-  model: getModel(),
+  model: getModelForAgent(),
   memory,
   tools: {
     // Browser

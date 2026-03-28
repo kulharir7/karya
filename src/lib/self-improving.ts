@@ -21,7 +21,7 @@
  */
 
 import { generateText } from "ai";
-import { getModel } from "./llm";
+import { getModelForAgent } from "./model-router";
 import { logger } from "./logger";
 import { eventBus } from "./event-bus";
 import * as fs from "fs";
@@ -162,7 +162,7 @@ Respond ONLY with valid JSON, no other text:
 {"outcome":"success","quality":8,"whatWorked":["x"],"whatFailed":["y"],"lesson":"z","shouldLearn":true}`;
 
   try {
-    const llm = getModel();
+    const llm = getModelForAgent();
     const result = await generateText({
       model: llm as any,
       prompt,

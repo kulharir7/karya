@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { getModel } from "@/lib/llm";
+import { getModelForAgent } from "@/lib/model-router";
 import { apiCallTool, csvParseTool, jsonQueryTool, dataTransformTool } from "../tools/data";
 import { readFileTool, writeFileTool, listFilesTool, searchFilesTool } from "../tools/file";
 import { readPdfTool } from "../tools/file/pdf";
@@ -41,7 +41,7 @@ export const dataAnalystAgent = new Agent({
 - For CSV with issues: handle encoding, missing values gracefully
 - Always report data quality issues (nulls, duplicates, format errors)
 - Reply in user's language`,
-  model: getModel(),
+  model: getModelForAgent(),
   tools: {
     csvParseTool, jsonQueryTool, dataTransformTool, apiCallTool,
     readFileTool, writeFileTool, listFilesTool, searchFilesTool,
