@@ -239,24 +239,9 @@ async function executeTask(task: ScheduledTask): Promise<{ success: boolean; err
   try {
     await eventBus.emit("tool:before_call", { toolName: "scheduler", args: { taskId: task.id, task: task.task } });
 
-    // Execute via internal agent call
-    const response = await fetch(`http://localhost:${process.env.PORT || 3000}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: `[Scheduled Task: ${task.name}] ${task.task}`,
-        sessionId: "default",
-      }),
-    });
-
-    // Read the SSE stream to completion
-    if (response.body) {
-      const reader = response.body.getReader();
-      while (true) {
-        const { done } = await reader.read();
-        if (done) break;
-      }
-    }
+    // Execute via TriggerExecutor → ChatProcessor (no HTTP fetch!)
+    const { executeScheduledTask } = await import("./trigger-executor");
+    const result = await executeScheduledTask(task.id, task.name, task.task);
 
     // Update task record
     let nextRunAt: number | null = null;
@@ -266,13 +251,20 @@ async function executeTask(task: ScheduledTask): Promise<{ success: boolean; err
       nextRunAt = calculateNextCron(task.cronExpr, now);
     }
 
-    await getDB().execute({
-      sql: `UPDATE tasks SET lastRunAt = ?, nextRunAt = ?, runCount = runCount + 1, lastError = NULL WHERE id = ?`,
-      args: [now, nextRunAt, task.id],
-    });
-
-    await eventBus.emit("tool:after_call", { toolName: "scheduler", result: { taskId: task.id, success: true } });
-    return { success: true };
+    if (result.success) {
+      await getDB().execute({
+        sql: `UPDATE tasks SET lastRunAt = ?, nextRunAt = ?, runCount = runCount + 1, lastError = NULL WHERE id = ?`,
+        args: [now, nextRunAt, task.id],
+      });
+      await eventBus.emit("tool:after_call", { toolName: "scheduler", result: { taskId: task.id, success: true } });
+      return { success: true };
+    } else {
+      await getDB().execute({
+        sql: `UPDATE tasks SET lastRunAt = ?, nextRunAt = ?, lastError = ?, runCount = runCount + 1 WHERE id = ?`,
+        args: [now, nextRunAt, result.error || "Failed", task.id],
+      });
+      return { success: false, error: result.error };
+    }
   } catch (err: any) {
     const errorMsg = err.message || "Task execution failed";
     await getDB().execute({

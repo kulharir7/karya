@@ -56,6 +56,9 @@ import {
   workflowListTool, workflowRunTool, workflowStatusTool,
   workflowHistoryTool, workflowResumeTool, workflowCancelTool, workflowStatsTool,
 } from "../tools/workflow";
+import {
+  triggerCreateTool, triggerListTool, triggerDeleteTool, triggerToggleTool,
+} from "../tools/triggers";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -423,5 +426,7 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
     // Workflows (Automated multi-step pipelines)
     workflowListTool, workflowRunTool, workflowStatusTool,
     workflowHistoryTool, workflowResumeTool, workflowCancelTool, workflowStatsTool,
+    // Triggers (Automation — file watchers, clipboard, webhooks)
+    triggerCreateTool, triggerListTool, triggerDeleteTool, triggerToggleTool,
   },
 });

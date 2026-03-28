@@ -177,6 +177,11 @@ const TOOL_NAME_MAP: Record<string, string> = {
   workflowResumeTool: "workflow-resume",
   workflowCancelTool: "workflow-cancel",
   workflowStatsTool: "workflow-stats",
+  // Triggers
+  triggerCreateTool: "trigger-create",
+  triggerListTool: "trigger-list",
+  triggerDeleteTool: "trigger-delete",
+  triggerToggleTool: "trigger-toggle",
 };
 
 export function resolveToolName(raw: string): string {
@@ -205,6 +210,7 @@ export function getToolsByCategory(): Record<string, string[]> {
     git: [],
     skills: [],
     workflows: [],
+    triggers: [],
   };
 
   for (const [varName, displayName] of Object.entries(TOOL_NAME_MAP)) {
@@ -257,6 +263,8 @@ export function getToolsByCategory(): Record<string, string[]> {
       categories.skills.push(displayName);
     } else if (displayName.startsWith("workflow-")) {
       categories.workflows.push(displayName);
+    } else if (displayName.startsWith("trigger-")) {
+      categories.triggers.push(displayName);
     }
   }
 

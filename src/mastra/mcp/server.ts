@@ -65,6 +65,9 @@ import {
   workflowListTool, workflowRunTool, workflowStatusTool,
   workflowHistoryTool, workflowResumeTool, workflowCancelTool, workflowStatsTool,
 } from "../tools/workflow";
+import {
+  triggerCreateTool, triggerListTool, triggerDeleteTool, triggerToggleTool,
+} from "../tools/triggers";
 
 /**
  * Karya MCP Server — exposes ALL 32 tools to external MCP clients.
@@ -180,6 +183,11 @@ export function createKaryaMCPServer() {
       workflowResumeTool,
       workflowCancelTool,
       workflowStatsTool,
+      // Triggers
+      triggerCreateTool,
+      triggerListTool,
+      triggerDeleteTool,
+      triggerToggleTool,
     },
   });
 }
