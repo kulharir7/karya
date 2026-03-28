@@ -83,6 +83,23 @@ export default function SettingsPage() {
   
   // Model params state
   const [showAdvanced, setShowAdvanced] = useState(false);
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"model" | "security" | "plugins" | "about">("model");
+  
+  // Security state
+  const [securityConfig, setSecurityConfig] = useState<any>(null);
+  const [plugins, setPlugins] = useState<any[]>([]);
+  
+  // Load security + plugins on tab switch
+  useEffect(() => {
+    if (activeTab === "security" && !securityConfig) {
+      fetch("/api/v1/security?action=config").then(r => r.json()).then(d => setSecurityConfig(d.data)).catch(() => {});
+    }
+    if (activeTab === "plugins" && plugins.length === 0) {
+      fetch("/api/v1/plugins").then(r => r.json()).then(d => setPlugins(d.data?.plugins || [])).catch(() => {});
+    }
+  }, [activeTab, securityConfig, plugins.length]);
 
   // Load config
   useEffect(() => {
@@ -269,7 +286,24 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="max-w-4xl mx-auto px-6 pt-4">
+        <div className="flex gap-1 border-b border-gray-200">
+          {(["model", "security", "plugins", "about"] as const).map((tab) => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === tab ? "bg-white border border-b-white border-gray-200 -mb-px text-purple-600" : "text-gray-500 hover:text-gray-700"
+              }`}>
+              {{ model: "🤖 Model", security: "🔒 Security", plugins: "🔌 Plugins", about: "ℹ️ About" }[tab]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="max-w-4xl mx-auto p-6 space-y-8">
+
+        {/* ========== MODEL TAB ========== */}
+        {activeTab === "model" && <>
         
         {/* Provider Selection */}
         <section className="bg-white rounded-xl border p-6">
@@ -617,6 +651,163 @@ export default function SettingsPage() {
             <li><strong>OpenRouter</strong> — Access all providers with one API key</li>
           </ul>
         </section>
+        </>}
+
+        {/* ========== SECURITY TAB ========== */}
+        {activeTab === "security" && (
+          <div className="space-y-6">
+            <section className="bg-white rounded-xl border p-6">
+              <h2 className="text-lg font-semibold mb-4">🔒 Security Settings</h2>
+              {securityConfig ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <div className="font-medium text-sm">Security Engine</div>
+                      <div className="text-xs text-gray-500">Command guard, path guard, rate limits</div>
+                    </div>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${securityConfig.enabled ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                      {securityConfig.enabled ? "● Enabled" : "○ Disabled"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">{securityConfig.blockedCommands?.length || 0}</div>
+                      <div className="text-xs text-gray-500">Blocked Command Patterns</div>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">{securityConfig.blockedPaths?.length || 0}</div>
+                      <div className="text-xs text-gray-500">Blocked Paths</div>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">{Object.keys(securityConfig.rateLimits || {}).length}</div>
+                      <div className="text-xs text-gray-500">Rate-Limited Tools</div>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">{securityConfig.blockedTools?.length || 0}</div>
+                      <div className="text-xs text-gray-500">Blocked Tools</div>
+                    </div>
+                  </div>
+
+                  {securityConfig.blockedPaths?.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">Blocked Paths</h3>
+                      <div className="space-y-1">
+                        {securityConfig.blockedPaths.map((p: string, i: number) => (
+                          <div key={i} className="text-xs font-mono text-gray-600 bg-gray-50 px-3 py-1.5 rounded">{p}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {Object.keys(securityConfig.rateLimits || {}).length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">Rate Limits (per minute)</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(securityConfig.rateLimits).map(([tool, limit]: [string, any]) => (
+                          <div key={tool} className="flex justify-between text-xs bg-gray-50 px-3 py-1.5 rounded">
+                            <span className="font-mono text-gray-600">{tool}</span>
+                            <span className="font-bold text-purple-600">{limit}/min</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-gray-500 text-sm">Loading security config...</div>
+              )}
+            </section>
+
+            <section className="bg-gray-100 rounded-xl p-4 text-sm text-gray-600">
+              <p>Security config is stored in <code>workspace/security.json</code>. Edit directly or use the <code>/api/v1/security</code> API.</p>
+            </section>
+          </div>
+        )}
+
+        {/* ========== PLUGINS TAB ========== */}
+        {activeTab === "plugins" && (
+          <div className="space-y-6">
+            <section className="bg-white rounded-xl border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">🔌 Installed Plugins</h2>
+                <button onClick={() => fetch("/api/v1/plugins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "reload" }) }).then(() => fetch("/api/v1/plugins").then(r => r.json()).then(d => setPlugins(d.data?.plugins || [])))}
+                  className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors">
+                  🔄 Reload
+                </button>
+              </div>
+
+              {plugins.length > 0 ? (
+                <div className="space-y-3">
+                  {plugins.map((p: any) => (
+                    <div key={p.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${p.enabled ? "bg-green-500" : "bg-gray-300"}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium">{p.manifest?.name || p.id}</div>
+                        <div className="text-xs text-gray-500">{p.manifest?.description || "No description"}</div>
+                        <div className="flex gap-2 mt-1">
+                          {p.hasSkill && <span className="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">SKILL</span>}
+                          {p.triggers?.length > 0 && <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">{p.triggers.length} triggers</span>}
+                          <span className="text-[9px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{p.source}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => fetch("/api/v1/plugins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "toggle", id: p.id, enabled: !p.enabled }) }).then(() => fetch("/api/v1/plugins").then(r => r.json()).then(d => setPlugins(d.data?.plugins || [])))}
+                        className={`px-3 py-1 text-xs rounded-lg transition-colors ${p.enabled ? "bg-red-100 text-red-600 hover:bg-red-200" : "bg-green-100 text-green-600 hover:bg-green-200"}`}>
+                        {p.enabled ? "Disable" : "Enable"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-gray-500 text-sm text-center py-6">
+                  No plugins installed. Create one with the agent: <code>&quot;Create a weather plugin&quot;</code>
+                </div>
+              )}
+            </section>
+
+            <section className="bg-gray-100 rounded-xl p-4 text-sm text-gray-600">
+              <p>Plugins live in <code>workspace/plugins/</code>. Each plugin has <code>plugin.json</code> + <code>SKILL.md</code>.</p>
+            </section>
+          </div>
+        )}
+
+        {/* ========== ABOUT TAB ========== */}
+        {activeTab === "about" && (
+          <div className="space-y-6">
+            <section className="bg-white rounded-xl border p-6 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-3xl mx-auto mb-4 shadow-xl shadow-purple-500/20">⚡</div>
+              <h2 className="text-2xl font-bold mb-1">Karya</h2>
+              <p className="text-gray-500 mb-4">AI Computer Agent that DOES real things.</p>
+              <div className="flex justify-center gap-6 text-sm text-gray-600 mb-6">
+                <div><span className="font-bold text-purple-600">82</span> tools</div>
+                <div><span className="font-bold text-purple-600">6</span> agents</div>
+                <div><span className="font-bold text-purple-600">9</span> workflows</div>
+                <div><span className="font-bold text-purple-600">29</span> API routes</div>
+              </div>
+              <div className="space-y-2 text-sm text-left max-w-md mx-auto">
+                <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-500">Version</span><span className="font-mono">0.5.0</span></div>
+                <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-500">Stack</span><span>Mastra + Next.js + TypeScript</span></div>
+                <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-500">Author</span><span>Ravi Kulhari</span></div>
+                <div className="flex justify-between py-1 border-b border-gray-100"><span className="text-gray-500">GitHub</span><a href="https://github.com/kulharir7/karya" target="_blank" className="text-purple-600 hover:underline">kulharir7/karya</a></div>
+                <div className="flex justify-between py-1"><span className="text-gray-500">License</span><span>MIT</span></div>
+              </div>
+            </section>
+
+            <section className="bg-white rounded-xl border p-6">
+              <h3 className="font-semibold mb-3">🏗️ Architecture</h3>
+              <pre className="text-xs text-gray-600 font-mono bg-gray-50 p-4 rounded-lg overflow-x-auto whitespace-pre">{`Web UI → SSE → ChatProcessor ← CLI (REPL)
+                    ↑                ↑
+               WebSocket        Telegram
+                    ↓
+          agent.stream() → Mastra Supervisor
+               ├── 82 tools (security-checked)
+               ├── 6 specialist agents
+               ├── 9 workflows
+               └── Plugin skills injected`}</pre>
+            </section>
+          </div>
+        )}
       </div>
     </div>
   );
