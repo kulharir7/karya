@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { AgentInfo, ToolCall } from "@/app/hooks/useChat";
 import { icons } from "@/app/components/sidebar/SidebarIcons";
 
@@ -30,6 +30,38 @@ const AGENT_LABELS: Record<string, string> = {
   researcher: "🔍 Research", "data-analyst": "📊 Data",
 };
 
+// All available models grouped by provider
+const MODEL_OPTIONS = [
+  { provider: "anthropic", label: "Anthropic", models: [
+    { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", icon: "⚡" },
+    { id: "claude-opus-4-20250514", name: "Claude Opus 4", icon: "🧠" },
+    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", icon: "⚡" },
+    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", icon: "⚡⚡" },
+  ]},
+  { provider: "openai", label: "OpenAI", models: [
+    { id: "gpt-4o", name: "GPT-4o", icon: "🧠" },
+    { id: "gpt-4o-mini", name: "GPT-4o Mini", icon: "⚡" },
+    { id: "o1", name: "o1", icon: "🧠" },
+    { id: "o3-mini", name: "o3 Mini", icon: "⚡" },
+  ]},
+  { provider: "google", label: "Google", models: [
+    { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", icon: "🧠" },
+    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", icon: "⚡" },
+    { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", icon: "⚡⚡" },
+  ]},
+  { provider: "ollama-cloud", label: "Ollama Cloud", models: [
+    { id: "qwen3-coder:480b", name: "Qwen 3 Coder 480B", icon: "💻" },
+    { id: "gpt-oss:120b", name: "GPT-OSS 120B", icon: "🧠" },
+    { id: "kimi-k2.5:cloud", name: "Kimi K2.5", icon: "⚡" },
+    { id: "deepseek-r1:cloud", name: "DeepSeek R1", icon: "🧠" },
+  ]},
+  { provider: "ollama", label: "Ollama Local", models: [
+    { id: "llama3.3:70b", name: "Llama 3.3 70B", icon: "🦙" },
+    { id: "qwen2.5-coder:32b", name: "Qwen 2.5 Coder 32B", icon: "💻" },
+    { id: "deepseek-coder-v2:16b", name: "DeepSeek Coder V2", icon: "💻" },
+  ]},
+];
+
 export default function Header({
   sessions, activeId, currentSession, messageCount, isLoading, streamingTools,
   streamingText, activeAgent, onToggleSidebar, onSwitchSession, onNewSession,
@@ -38,14 +70,32 @@ export default function Header({
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [currentModel, setCurrentModel] = useState("loading...");
+  const [currentProvider, setCurrentProvider] = useState("");
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Fetch current model on mount
   useEffect(() => {
     fetch("/api/v1/model").then(r => r.json()).then(d => {
       if (d.data?.displayName) setCurrentModel(d.data.displayName);
+      if (d.data?.provider) setCurrentProvider(d.data.provider);
     }).catch(() => {});
   }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setModelDropdownOpen(false);
+      }
+    };
+    if (modelDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [modelDropdownOpen]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -63,6 +113,40 @@ export default function Header({
       onRenameSession(trimmed);
     }
     setEditing(false);
+  };
+
+  // Switch model via API
+  const switchModel = async (provider: string, model: string) => {
+    setSwitching(true);
+    setModelDropdownOpen(false);
+    try {
+      const res = await fetch("/api/v1/model", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, model }),
+      });
+      const data = await res.json();
+      if (data.ok && data.data) {
+        // Update display immediately
+        setCurrentProvider(provider);
+        setCurrentModel(data.data.displayName || `${provider}/${model}`);
+      }
+    } catch (err) {
+      console.error("Failed to switch model:", err);
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  // Get short display name
+  const getShortModelName = () => {
+    const parts = currentModel.split("/");
+    const modelPart = parts[parts.length - 1];
+    // Shorten long names
+    if (modelPart.length > 20) {
+      return modelPart.substring(0, 18) + "...";
+    }
+    return modelPart;
   };
 
   return (
@@ -119,10 +203,72 @@ export default function Header({
 
       {/* Right: Actions */}
       <div className="flex items-center gap-1 shrink-0">
-        {/* Model badge — dynamic, hidden on mobile */}
-        <span className="hidden lg:flex header-model-badge text-[9px] text-[var(--text-muted)] bg-[var(--bg-tertiary)] px-2 py-1 rounded-md border border-[var(--border)] font-mono mr-1" title="Current model">
-          {currentModel}
-        </span>
+        {/* Model Switcher Dropdown */}
+        <div className="relative hidden lg:block" ref={dropdownRef}>
+          <button
+            onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+            className={`flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-lg border transition-all font-mono ${
+              modelDropdownOpen 
+                ? "bg-purple-500/10 border-purple-500/50 text-purple-400" 
+                : "bg-[var(--bg-tertiary)] border-[var(--border)] text-[var(--text-muted)] hover:border-purple-500/30 hover:text-[var(--text-secondary)]"
+            }`}
+            title="Click to change model"
+          >
+            {switching ? (
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full border border-purple-400 border-t-transparent animate-spin" />
+                Switching...
+              </span>
+            ) : (
+              <>
+                <span className="text-[11px]">🤖</span>
+                <span>{getShortModelName()}</span>
+                <span className="text-[8px] opacity-60">▼</span>
+              </>
+            )}
+          </button>
+
+          {/* Dropdown Menu */}
+          {modelDropdownOpen && (
+            <div className="absolute right-0 top-full mt-1 w-64 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-2xl z-50 overflow-hidden">
+              <div className="p-2 border-b border-[var(--border)]">
+                <span className="text-[10px] text-[var(--text-muted)] font-medium uppercase tracking-wider">Switch Model</span>
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {MODEL_OPTIONS.map((group) => (
+                  <div key={group.provider}>
+                    <div className="px-3 py-1.5 text-[9px] font-semibold text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-primary)]">
+                      {group.label}
+                    </div>
+                    {group.models.map((model) => {
+                      const isActive = currentProvider === group.provider && currentModel.includes(model.id);
+                      return (
+                        <button
+                          key={model.id}
+                          onClick={() => switchModel(group.provider, model.id)}
+                          className={`w-full px-3 py-2 text-left flex items-center gap-2 transition-colors ${
+                            isActive 
+                              ? "bg-purple-500/10 text-purple-400" 
+                              : "hover:bg-[var(--bg-hover)] text-[var(--text-secondary)]"
+                          }`}
+                        >
+                          <span className="text-sm">{model.icon}</span>
+                          <span className="text-[11px] font-medium flex-1">{model.name}</span>
+                          {isActive && <span className="text-[10px] text-purple-400">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              <div className="p-2 border-t border-[var(--border)] bg-[var(--bg-primary)]">
+                <a href="/settings" className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                  ⚙️ More options in Settings
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Session switcher */}
         <select value={activeId} onChange={(e) => onSwitchSession(e.target.value)}

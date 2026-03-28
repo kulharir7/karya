@@ -36,13 +36,7 @@ interface ModelConfig {
 }
 
 function readConfig(): ModelConfig {
-  // Env vars have priority
-  const envProvider = process.env.LLM_PROVIDER;
-  const envModel = process.env.LLM_MODEL;
-  const envBaseURL = process.env.LLM_BASE_URL;
-  const envApiKey = process.env.LLM_API_KEY;
-
-  // File config as fallback
+  // File config has priority (allows UI switching)
   let fileConfig: any = {};
   try {
     if (fs.existsSync(CONFIG_PATH)) {
@@ -50,15 +44,27 @@ function readConfig(): ModelConfig {
     }
   } catch {}
 
-  return {
-    provider: envProvider || fileConfig.provider || "anthropic",
-    model: envModel || fileConfig.model || "claude-sonnet-4-20250514",
-    customProvider: envBaseURL ? {
+  // Env vars as fallback (initial setup)
+  const envProvider = process.env.LLM_PROVIDER;
+  const envModel = process.env.LLM_MODEL;
+  const envBaseURL = process.env.LLM_BASE_URL;
+  const envApiKey = process.env.LLM_API_KEY;
+
+  // File config wins if it has provider set (means user has configured via UI)
+  const provider = fileConfig.provider || envProvider || "anthropic";
+  const model = fileConfig.model || envModel || "claude-sonnet-4-20250514";
+
+  // For custom providers, merge file + env
+  let customProvider = fileConfig.customProvider;
+  if (!customProvider && envBaseURL) {
+    customProvider = {
       name: envProvider || "custom",
       baseURL: envBaseURL,
       apiKey: envApiKey || "",
-    } : fileConfig.customProvider,
-  };
+    };
+  }
+
+  return { provider, model, customProvider };
 }
 
 // ============================================
