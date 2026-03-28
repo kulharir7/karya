@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f0a1a"/>
+      <stop offset="50%" style="stop-color:#1a1033"/>
+      <stop offset="100%" style="stop-color:#0f0a1a"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="boltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24"/>
+      <stop offset="100%" style="stop-color:#f59e0b"/>
+    </linearGradient>
+    <filter id="glowBolt">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="400" fill="url(#bgGrad)" rx="16"/>
+  
+  <!-- Grid pattern -->
+  <g opacity="0.05">
+    <line x1="0" y1="100" x2="1200" y2="100" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="200" x2="1200" y2="200" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="300" x2="1200" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="200" y1="0" x2="200" y2="400" stroke="white" stroke-width="1"/>
+    <line x1="400" y1="0" x2="400" y2="400" stroke="white" stroke-width="1"/>
+    <line x1="600" y1="0" x2="600" y2="400" stroke="white" stroke-width="1"/>
+    <line x1="800" y1="0" x2="800" y2="400" stroke="white" stroke-width="1"/>
+    <line x1="1000" y1="0" x2="1000" y2="400" stroke="white" stroke-width="1"/>
+  </g>
+  
+  <!-- Accent line -->
+  <rect x="0" y="396" width="1200" height="4" fill="url(#accentGrad)"/>
+  
+  <!-- Logo circle -->
+  <circle cx="200" cy="200" r="80" fill="url(#accentGrad)" opacity="0.9"/>
+  <circle cx="200" cy="200" r="70" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>
+  
+  <!-- Bolt icon -->
+  <g filter="url(#glowBolt)" transform="translate(200,200) scale(0.5) translate(-256,-256)">
+    <path d="M290 80 L180 260 L240 260 L220 432 L340 240 L275 240 Z" fill="url(#boltGrad)" stroke="white" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+  
+  <!-- Text -->
+  <text x="340" y="175" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="800" letter-spacing="-2">KARYA</text>
+  <text x="340" y="225" fill="#a78bfa" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="500">AI Computer Agent</text>
+  
+  <!-- Stats -->
+  <g transform="translate(340, 270)">
+    <rect x="0" y="0" width="100" height="32" rx="6" fill="rgba(124,58,237,0.2)" stroke="rgba(124,58,237,0.4)" stroke-width="1"/>
+    <text x="50" y="21" fill="#c4b5fd" font-family="system-ui" font-size="13" font-weight="600" text-anchor="middle">86+ Tools</text>
+    
+    <rect x="115" y="0" width="110" height="32" rx="6" fill="rgba(124,58,237,0.2)" stroke="rgba(124,58,237,0.4)" stroke-width="1"/>
+    <text x="170" y="21" fill="#c4b5fd" font-family="system-ui" font-size="13" font-weight="600" text-anchor="middle">134 Plugins</text>
+    
+    <rect x="240" y="0" width="110" height="32" rx="6" fill="rgba(124,58,237,0.2)" stroke="rgba(124,58,237,0.4)" stroke-width="1"/>
+    <text x="295" y="21" fill="#c4b5fd" font-family="system-ui" font-size="13" font-weight="600" text-anchor="middle">6 Agents</text>
+
+    <rect x="365" y="0" width="120" height="32" rx="6" fill="rgba(124,58,237,0.2)" stroke="rgba(124,58,237,0.4)" stroke-width="1"/>
+    <text x="425" y="21" fill="#c4b5fd" font-family="system-ui" font-size="13" font-weight="600" text-anchor="middle">9 Workflows</text>
+  </g>
+  
+  <!-- Tech dots -->
+  <circle cx="900" cy="80" r="3" fill="#7c3aed" opacity="0.4"/>
+  <circle cx="1050" cy="120" r="2" fill="#7c3aed" opacity="0.3"/>
+  <circle cx="950" cy="300" r="4" fill="#7c3aed" opacity="0.3"/>
+  <circle cx="1100" cy="250" r="2" fill="#7c3aed" opacity="0.2"/>
+  <circle cx="850" cy="350" r="3" fill="#7c3aed" opacity="0.2"/>
+</svg>
