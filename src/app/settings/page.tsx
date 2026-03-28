@@ -92,11 +92,14 @@ export default function SettingsPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   
   // Tab state
-  const [activeTab, setActiveTab] = useState<"model" | "security" | "plugins" | "about">("model");
+  const [activeTab, setActiveTab] = useState<"model" | "security" | "plugins" | "mcp" | "about">("model");
   
   // Security state
   const [securityConfig, setSecurityConfig] = useState<any>(null);
   const [plugins, setPlugins] = useState<any[]>([]);
+  const [mcpServers, setMcpServers] = useState<any[]>([]);
+  const [mcpNewUrl, setMcpNewUrl] = useState("");
+  const [mcpNewName, setMcpNewName] = useState("");
   
   // Load security + plugins on tab switch
   useEffect(() => {
@@ -106,7 +109,10 @@ export default function SettingsPage() {
     if (activeTab === "plugins" && plugins.length === 0) {
       fetch("/api/v1/plugins").then(r => r.json()).then(d => setPlugins(d.data?.plugins || [])).catch(() => {});
     }
-  }, [activeTab, securityConfig, plugins.length]);
+    if (activeTab === "mcp" && mcpServers.length === 0) {
+      fetch("/api/v1/mcp/servers").then(r => r.json()).then(d => setMcpServers(d.data?.servers || d.servers || [])).catch(() => {});
+    }
+  }, [activeTab, securityConfig, plugins.length, mcpServers.length]);
 
   // Load config
   useEffect(() => {
@@ -296,12 +302,12 @@ export default function SettingsPage() {
       {/* Tabs */}
       <div className="max-w-4xl mx-auto px-6 pt-4">
         <div className="flex gap-1 border-b border-gray-200">
-          {(["model", "security", "plugins", "about"] as const).map((tab) => (
+          {(["model", "security", "plugins", "mcp", "about"] as const).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
                 activeTab === tab ? "bg-white border border-b-white border-gray-200 -mb-px text-purple-600" : "text-gray-500 hover:text-gray-700"
               }`}>
-              {{ model: "🤖 Model", security: "🔒 Security", plugins: "🔌 Plugins", about: "ℹ️ About" }[tab]}
+              {{ model: "🤖 Model", security: "🔒 Security", plugins: "🔌 Plugins", mcp: "🔗 MCP", about: "ℹ️ About" }[tab]}
             </button>
           ))}
         </div>
@@ -812,6 +818,79 @@ export default function SettingsPage() {
 
             <section className="bg-gray-100 rounded-xl p-4 text-sm text-gray-600">
               <p>Plugins live in <code>workspace/plugins/</code>. Each plugin has <code>plugin.json</code> + <code>SKILL.md</code>.</p>
+            </section>
+          </div>
+        )}
+
+        {/* ========== MCP TAB ========== */}
+        {activeTab === "mcp" && (
+          <div className="space-y-6">
+            <section className="bg-white rounded-xl border p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold">🔗 MCP Servers</h2>
+                  <p className="text-xs text-gray-500 mt-1">Connect external MCP servers to give Karya more tools</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Port: 3001</span>
+                  <button onClick={() => { setMcpServers([]); fetch("/api/v1/mcp/servers").then(r => r.json()).then(d => setMcpServers(d.data?.servers || d.servers || [])); }}
+                    className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors">🔄 Refresh</button>
+                </div>
+              </div>
+
+              {/* Add new server */}
+              <div className="flex gap-2 mb-4 p-3 bg-gray-50 rounded-lg">
+                <input value={mcpNewName} onChange={(e) => setMcpNewName(e.target.value)} placeholder="Server name" className="flex-1 px-3 py-1.5 text-sm border rounded-lg focus:border-purple-400 focus:outline-none" />
+                <input value={mcpNewUrl} onChange={(e) => setMcpNewUrl(e.target.value)} placeholder="http://localhost:8080/mcp" className="flex-[2] px-3 py-1.5 text-sm border rounded-lg focus:border-purple-400 focus:outline-none font-mono" />
+                <button onClick={async () => {
+                  if (!mcpNewName || !mcpNewUrl) return;
+                  await fetch("/api/v1/mcp/servers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: mcpNewName, url: mcpNewUrl }) });
+                  setMcpNewName(""); setMcpNewUrl("");
+                  const r = await fetch("/api/v1/mcp/servers"); const d = await r.json(); setMcpServers(d.data?.servers || d.servers || []);
+                }} className="px-4 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">+ Add</button>
+              </div>
+
+              {/* Server list */}
+              {mcpServers.length > 0 ? (
+                <div className="space-y-2">
+                  {mcpServers.map((s: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${s.enabled ? "bg-green-500" : "bg-gray-300"}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium">{s.name || s.id}</div>
+                        <div className="text-xs text-gray-500 font-mono truncate">{s.url}</div>
+                        {s.transport && <span className="text-[9px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded mt-1 inline-block">{s.transport}</span>}
+                      </div>
+                      <button onClick={async () => {
+                        await fetch(`/api/v1/mcp/servers/${encodeURIComponent(s.name || s.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !s.enabled }) });
+                        const r = await fetch("/api/v1/mcp/servers"); const d = await r.json(); setMcpServers(d.data?.servers || d.servers || []);
+                      }} className={`px-3 py-1 text-xs rounded-lg transition-colors ${s.enabled ? "bg-red-100 text-red-600 hover:bg-red-200" : "bg-green-100 text-green-600 hover:bg-green-200"}`}>
+                        {s.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button onClick={async () => {
+                        await fetch(`/api/v1/mcp/servers/${encodeURIComponent(s.name || s.id)}`, { method: "DELETE" });
+                        const r = await fetch("/api/v1/mcp/servers"); const d = await r.json(); setMcpServers(d.data?.servers || d.servers || []);
+                      }} className="px-2 py-1 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">🗑️</button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-gray-500 text-sm text-center py-6">No MCP servers connected. Add one above to extend Karya&apos;s capabilities.</div>
+              )}
+            </section>
+
+            <section className="bg-white rounded-xl border p-6">
+              <h3 className="font-semibold mb-3">📡 Karya MCP Server</h3>
+              <p className="text-sm text-gray-600 mb-3">Karya exposes its own tools via MCP on port <code className="bg-gray-100 px-1.5 py-0.5 rounded">3001</code>. External clients (Cursor, Claude Desktop, VS Code) can connect to use Karya&apos;s tools.</p>
+              <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs text-gray-600">
+                <div>URL: http://localhost:3001</div>
+                <div>Transport: streamable-http</div>
+                <div>Tools: 77+</div>
+              </div>
+            </section>
+
+            <section className="bg-gray-100 rounded-xl p-4 text-sm text-gray-600">
+              <p>MCP servers are stored in <code>karya-mcp.json</code>. Connected tools are auto-injected into the agent.</p>
             </section>
           </div>
         )}
