@@ -1,7 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { getModelForAgent } from "@/lib/model-router";
 import {
-  readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool,
   readPdfTool, resizeImageTool, zipFilesTool, unzipFilesTool, batchRenameTool, fileSizeTool,
 } from "../tools/file";
 
@@ -42,7 +41,6 @@ export const fileAgent = new Agent({
 - Reply in user's language`,
   model: getModelForAgent(),
   tools: {
-    readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool,
     readPdfTool, resizeImageTool, zipFilesTool, unzipFilesTool, batchRenameTool, fileSizeTool,
   },
 });

@@ -103,12 +103,7 @@ const TOOL_NAME_MAP: Record<string, string> = {
   screenshotTool: "browser-screenshot",
   webSearchTool: "web-search",
   browserAgentTool: "browser-agent",
-  // Files
-  readFileTool: "file-read",
-  writeFileTool: "file-write",
-  listFilesTool: "file-list",
-  moveFileTool: "file-move",
-  searchFilesTool: "file-search",
+  // Files (basic read/write/list/move/search now via Mastra Workspace)
   readPdfTool: "file-read-pdf",
   resizeImageTool: "file-resize-image",
   zipFilesTool: "file-zip",

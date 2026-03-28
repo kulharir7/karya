@@ -100,9 +100,10 @@ logger.info("supervisor", `Memory: ${activeFeatures.join(" + ")}`);
 // Import ALL tools from all categories
 import { navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool } from "../tools/browser";
 import {
-  readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool,
   readPdfTool, resizeImageTool, zipFilesTool, unzipFilesTool, batchRenameTool, fileSizeTool,
 } from "../tools/file";
+// NOTE: readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool
+// REMOVED — Mastra Workspace LocalFilesystem provides these automatically
 import { executeCommandTool } from "../tools/shell";
 import {
   systemInfoTool, clipboardReadTool, clipboardWriteTool, notifyTool,
@@ -498,8 +499,7 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
   tools: {
     // Browser
     navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool,
-    // Files
-    readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool,
+    // Files (special only — basic read/write/list/move handled by Mastra Workspace)
     readPdfTool, resizeImageTool, zipFilesTool, unzipFilesTool, batchRenameTool, fileSizeTool,
     // Code
     codeWriteTool, codeExecuteTool, codeAnalyzeTool,

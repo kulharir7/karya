@@ -1,7 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { getModelForAgent } from "@/lib/model-router";
 import { apiCallTool, csvParseTool, jsonQueryTool, dataTransformTool } from "../tools/data";
-import { readFileTool, writeFileTool, listFilesTool, searchFilesTool } from "../tools/file";
 import { readPdfTool } from "../tools/file/pdf";
 import { codeExecuteTool } from "../tools/code";
 
@@ -45,7 +44,6 @@ export const dataAnalystAgent = new Agent({
   model: getModelForAgent(),
   tools: {
     csvParseTool, jsonQueryTool, dataTransformTool, apiCallTool,
-    readFileTool, writeFileTool, listFilesTool, searchFilesTool,
     readPdfTool, codeExecuteTool,
   },
 });

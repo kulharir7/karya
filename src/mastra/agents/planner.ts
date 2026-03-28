@@ -5,11 +5,6 @@ import { createBasicMemory } from "@/lib/semantic-memory";
 const memory = createBasicMemory();
 import { navigateTool, actTool, extractTool, screenshotTool, browserAgentTool } from "../tools/browser";
 import {
-  readFileTool,
-  writeFileTool,
-  listFilesTool,
-  moveFileTool,
-  searchFilesTool,
   readPdfTool,
   resizeImageTool,
   zipFilesTool,
@@ -103,11 +98,6 @@ User: "MakeMyTrip pe Delhi to Mumbai flight check karo"
     extractTool,
     screenshotTool,
     webSearchTool,
-    readFileTool,
-    writeFileTool,
-    listFilesTool,
-    moveFileTool,
-    searchFilesTool,
     readPdfTool,
     resizeImageTool,
     zipFilesTool,

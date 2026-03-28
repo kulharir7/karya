@@ -11,7 +11,7 @@ import { browserAgentTool } from "../tools/browser/multi";
 
 // File tools
 import {
-  readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool,
+  // readFileTool, writeFileTool, listFilesTool, moveFileTool, searchFilesTool — now Mastra Workspace
 } from "../tools/file";
 import { readPdfTool } from "../tools/file/pdf";
 import { resizeImageTool } from "../tools/file/image";
@@ -100,11 +100,7 @@ export function createKaryaMCPServer() {
       browserAgentTool,
 
       // === File (10) ===
-      readFileTool,
-      writeFileTool,
-      listFilesTool,
-      moveFileTool,
-      searchFilesTool,
+            // File basics now handled by Mastra Workspace (removed from MCP)
       readPdfTool,
       resizeImageTool,
       zipFilesTool,
