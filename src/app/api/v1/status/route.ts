@@ -66,6 +66,22 @@ export async function GET(req: NextRequest) {
       mcpInfo = { status: "unavailable" };
     }
 
+    // Heartbeat status
+    let heartbeatInfo: any = { status: "unknown" };
+    try {
+      const { getHeartbeatManager } = await import("@/lib/heartbeat");
+      const mgr = getHeartbeatManager();
+      const hbStatus = mgr.getStatus();
+      heartbeatInfo = {
+        status: hbStatus.running ? "active" : "stopped",
+        taskCount: hbStatus.taskCount,
+        enabledCount: hbStatus.enabledCount,
+        totalRuns: hbStatus.totalRuns,
+      };
+    } catch {
+      heartbeatInfo = { status: "unavailable" };
+    }
+
     // WebSocket status
     let wsInfo: any = { status: "unknown" };
     try {
@@ -110,6 +126,7 @@ export async function GET(req: NextRequest) {
       },
       memory: memoryStatus,
       scheduler: schedulerInfo,
+      heartbeat: heartbeatInfo,
       mcp: mcpInfo,
       websocket: wsInfo,
       rateLimiter: rateLimiter.stats(),
