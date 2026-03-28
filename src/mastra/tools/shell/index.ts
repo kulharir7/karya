@@ -8,6 +8,7 @@ export const executeCommandTool = createTool({
   description:
     "Execute a shell command on the computer. Use for: running scripts, installing packages, " +
     "git operations, system info, etc. Dangerous commands (format, rm -rf /, etc.) are blocked by security policy.",
+  requireApproval: true,
   inputSchema: z.object({
     command: z.string().describe("The shell command to execute"),
     cwd: z.string().optional().describe("Working directory (optional)"),

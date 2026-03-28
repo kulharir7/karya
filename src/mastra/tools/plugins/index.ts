@@ -127,6 +127,7 @@ export const pluginToggleTool = createTool({
 
 export const pluginUninstallTool = createTool({
   id: "plugin-uninstall",
+  requireApproval: true,
   description: "Uninstall a plugin — removes it from disk completely",
   inputSchema: z.object({
     id: z.string().describe("Plugin ID to uninstall"),

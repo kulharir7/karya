@@ -70,6 +70,7 @@ export const gitCommitTool = createTool({
 
 export const gitPushTool = createTool({
   id: "git-push",
+  requireApproval: true,
   description: "Push commits to remote repository. ALWAYS confirm with user before pushing.",
   inputSchema: z.object({
     path: z.string().describe("Path to the git repository"),

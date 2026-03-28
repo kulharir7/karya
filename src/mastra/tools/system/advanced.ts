@@ -85,6 +85,7 @@ export const openAppTool = createTool({
 
 export const killProcessTool = createTool({
   id: "system-kill-process",
+  requireApproval: true,
   description: "Kill/stop a running process by name or PID. Use when user says 'close chrome', 'kill that process', 'stop notepad'.",
   inputSchema: z.object({
     target: z.string().describe("Process name (e.g., 'notepad', 'chrome') or PID number"),

@@ -63,6 +63,7 @@ export const codeWriteTool = createTool({
 
 export const codeExecuteTool = createTool({
   id: "code-execute",
+  requireApproval: true,
   description:
     "Execute JavaScript/TypeScript code directly and return the result. " +
     "Use for: calculations, data transformations, generating output, testing logic. " +

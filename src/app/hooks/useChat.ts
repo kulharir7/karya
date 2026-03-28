@@ -147,6 +147,11 @@ export function useChat(opts: {
               } else if (d.type === "tool-call") {
                 tools.push({ toolName: d.toolName, args: d.args, status: "running" });
                 setStreamingTools([...tools]);
+              } else if (d.type === "tool-approval") {
+                // Tool requires approval — show as "pending" in UI
+                tools.push({ toolName: d.toolName, args: d.args, status: "running" });
+                setStreamingTools([...tools]);
+                // TODO: Show approval dialog, send approve/decline response
               } else if (d.type === "tool-result") {
                 const i = tools.findIndex((t) => t.toolName === d.toolName && t.status === "running");
                 if (i !== -1) {

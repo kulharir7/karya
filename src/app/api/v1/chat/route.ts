@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
           onSession: (sid) => send({ type: "session", sessionId: sid }),
           onTextDelta: (delta) => send({ type: "text-delta", content: delta }),
           onToolCall: (toolName, args) => send({ type: "tool-call", toolName, args }),
+          onToolApproval: (toolName, args, toolCallId) => send({ type: "tool-approval", toolName, args, toolCallId }),
           onToolResult: (toolName, result) => send({ type: "tool-result", toolName, result }),
           onDone: (result) => {
             send({

@@ -27,6 +27,7 @@ import { eventBus } from "@/lib/event-bus";
 import { getWorkspaceContext, initWorkspace, logToDaily } from "@/lib/memory-engine";
 import { getRelevantLessons, runSelfReview } from "@/lib/self-improving";
 import { getActivePluginSkills, matchPlugins, loadPluginSkill } from "@/lib/plugin-registry";
+import { logger } from "@/lib/logger";
 // Import audit-log to auto-register event bus hooks (side effect import)
 import "@/lib/audit-log";
 import { compactIfNeeded, type ContextMessage } from "@/lib/context-compaction";
@@ -73,6 +74,8 @@ export interface ChatEvents {
   onToolCall?: (toolName: string, args: any) => void;
   /** Tool execution finished */
   onToolResult?: (toolName: string, result: any) => void;
+  /** Tool requires approval before execution */
+  onToolApproval?: (toolName: string, args: any, toolCallId: string) => void;
   /** Processing complete */
   onDone?: (result: ChatResult) => void;
   /** Error occurred */
@@ -526,6 +529,22 @@ export async function processChat(
         pendingTools.set(callId, { toolName, args });
         await eventBus.emit("tool:before_call", { toolName, args, sessionId });
         events.onToolCall?.(toolName, args);
+      } else if (type === "tool-call-approval") {
+        // Mastra's requireApproval: true — tool paused before execution
+        const rawName = ev?.toolName || ev?.payload?.toolName || "unknown";
+        const toolName = resolveToolName(rawName);
+        const args = ev?.args || ev?.payload?.args || {};
+        const toolCallId = ev?.toolCallId || ev?.payload?.toolCallId || "";
+        events.onToolApproval?.(toolName, args, toolCallId);
+        // Auto-approve for now (until UI approval flow is built)
+        // In future: wait for user response via WS/SSE
+        logger.info("chat-processor", `Tool approval requested: ${toolName} (auto-approved)`);
+      } else if (type === "tool-call-suspended") {
+        // Tool suspended itself during execution (needs user input)
+        const rawName = ev?.toolName || ev?.payload?.toolName || "unknown";
+        const toolName = resolveToolName(rawName);
+        events.onToolApproval?.(toolName, ev?.payload, ev?.toolCallId || "");
+        logger.info("chat-processor", `Tool suspended: ${toolName}`);
       } else if (type === "tool-result") {
         const rawName = ev?.toolName || ev?.name || "unknown";
         const toolName = resolveToolName(rawName);
