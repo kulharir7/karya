@@ -410,6 +410,20 @@ export async function processChat(
 
   const contextMessages: any[] = [];
 
+  // ---- 3.2: Inject current model identity ----
+  // This ensures the model knows what it actually is (prevents hallucination)
+  try {
+    const { getCurrentModelInfo } = await import("@/lib/model-router");
+    const modelInfo = getCurrentModelInfo();
+    contextMessages.push({
+      role: "system",
+      content: `## Your Identity
+You are running as **${modelInfo.displayName}** (Provider: ${modelInfo.provider}, Model: ${modelInfo.model}).
+When asked what model you are, always answer truthfully with this information.
+Do NOT claim to be GPT-4, Claude, or any other model unless that's actually what you are.`,
+    });
+  } catch {}
+
   // Workspace context as system message
   if (workspaceContext) {
     contextMessages.push({
