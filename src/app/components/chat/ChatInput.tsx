@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { ImageAttachment } from "@/app/hooks/useChat";
 import { icons } from "@/app/components/sidebar/SidebarIcons";
+import { useVoice } from "@/app/hooks/useVoice";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
@@ -28,6 +29,7 @@ export default function ChatInput({ isLoading, onSend, onCancel }: ChatInputProp
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { isListening, transcript, sttSupported, startListening, stopListening } = useVoice();
 
   // Rotate placeholder every 4s
   useEffect(() => {
@@ -134,6 +136,35 @@ export default function ChatInput({ isLoading, onSend, onCancel }: ChatInputProp
             <input ref={fileRef} type="file" className="hidden" multiple accept="image/*,.pdf,.txt,.json,.csv,.md,.py,.js,.ts,.html,.css" onChange={(e) => e.target.files && processFiles(e.target.files)} />
             {icons.attach}
           </label>
+
+          {/* Mic button (STT) */}
+          {sttSupported && (
+            <button
+              type="button"
+              onClick={() => {
+                if (isListening) {
+                  stopListening();
+                } else {
+                  startListening((text) => {
+                    setInput((prev) => prev + (prev ? " " : "") + text);
+                  });
+                }
+              }}
+              className={`shrink-0 pb-1 transition-colors ${
+                isListening
+                  ? "text-red-500 animate-pulse"
+                  : "text-[var(--text-muted)] hover:text-[var(--accent)]"
+              }`}
+              title={isListening ? "Stop listening" : "Voice input"}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            </button>
+          )}
 
           {/* Textarea */}
           <div className="flex-1 min-w-0 relative">

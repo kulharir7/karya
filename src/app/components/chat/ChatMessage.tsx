@@ -3,6 +3,7 @@
 import type { ChatMessage as ChatMessageType } from "@/app/hooks/useChat";
 import MessageContent from "@/app/components/MessageContent";
 import ToolChips from "./ToolChip";
+import { useVoice } from "@/app/hooks/useVoice";
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -11,6 +12,7 @@ interface ChatMessageProps {
 
 export default function ChatMessage({ message: msg, onRetry }: ChatMessageProps) {
   const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const { speak, isSpeaking, stopSpeaking, ttsSupported } = useVoice();
 
   if (msg.role === "user") {
     return (
@@ -77,6 +79,16 @@ export default function ChatMessage({ message: msg, onRetry }: ChatMessageProps)
           >
             📋 Copy
           </button>
+          {ttsSupported && (
+            <button
+              onClick={() => isSpeaking ? stopSpeaking() : speak(msg.content)}
+              className={`text-[10px] px-2 py-1 rounded-md transition-all ${
+                isSpeaking ? "text-purple-500 bg-purple-500/10" : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]"
+              }`}
+            >
+              {isSpeaking ? "🔊 Stop" : "🔈 Read"}
+            </button>
+          )}
           {onRetry && (
             <button
               onClick={() => onRetry(msg.content)}
