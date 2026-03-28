@@ -1,0 +1,13 @@
+{
+  "name": "github",
+  "version": "1.0.0",
+  "description": "GitHub operations — repos, issues, PRs, commits, actions",
+  "author": "Karya",
+  "triggers": ["github", "repo", "repository", "issue", "pull request", "PR", "commit", "git"],
+  "config": {
+    "GITHUB_TOKEN": {
+      "required": false,
+      "description": "GitHub personal access token (optional, for private repos)"
+    }
+  }
+}

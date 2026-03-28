@@ -1,0 +1,7 @@
+{
+  "name": "calculator",
+  "version": "1.0.0",
+  "description": "Advanced calculations — math, conversions, financial formulas",
+  "author": "Karya",
+  "triggers": ["calculate", "math", "convert", "percentage", "EMI", "interest", "GST", "tax"]
+}

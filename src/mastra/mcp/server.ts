@@ -68,6 +68,9 @@ import {
 import {
   triggerCreateTool, triggerListTool, triggerDeleteTool, triggerToggleTool,
 } from "../tools/triggers";
+import {
+  pluginListTool, pluginCreateTool, pluginInstallTool, pluginToggleTool, pluginUninstallTool,
+} from "../tools/plugins";
 
 /**
  * Karya MCP Server — exposes ALL 32 tools to external MCP clients.
@@ -188,6 +191,12 @@ export function createKaryaMCPServer() {
       triggerListTool,
       triggerDeleteTool,
       triggerToggleTool,
+      // Plugins
+      pluginListTool,
+      pluginCreateTool,
+      pluginInstallTool,
+      pluginToggleTool,
+      pluginUninstallTool,
     },
   });
 }

@@ -59,6 +59,9 @@ import {
 import {
   triggerCreateTool, triggerListTool, triggerDeleteTool, triggerToggleTool,
 } from "../tools/triggers";
+import {
+  pluginListTool, pluginCreateTool, pluginInstallTool, pluginToggleTool, pluginUninstallTool,
+} from "../tools/plugins";
 
 export const supervisorAgent = new Agent({
   id: "karya-supervisor",
@@ -428,5 +431,7 @@ This is CRITICAL for good UX — don't pollute user's workspace with unnecessary
     workflowHistoryTool, workflowResumeTool, workflowCancelTool, workflowStatsTool,
     // Triggers (Automation — file watchers, clipboard, webhooks)
     triggerCreateTool, triggerListTool, triggerDeleteTool, triggerToggleTool,
+    // Plugins (Extensibility — install, create, manage plugins)
+    pluginListTool, pluginCreateTool, pluginInstallTool, pluginToggleTool, pluginUninstallTool,
   },
 });

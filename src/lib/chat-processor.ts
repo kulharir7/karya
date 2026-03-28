@@ -183,6 +183,12 @@ const TOOL_NAME_MAP: Record<string, string> = {
   triggerListTool: "trigger-list",
   triggerDeleteTool: "trigger-delete",
   triggerToggleTool: "trigger-toggle",
+  // Plugins
+  pluginListTool: "plugin-list",
+  pluginCreateTool: "plugin-create",
+  pluginInstallTool: "plugin-install",
+  pluginToggleTool: "plugin-toggle",
+  pluginUninstallTool: "plugin-uninstall",
 };
 
 export function resolveToolName(raw: string): string {
@@ -212,6 +218,7 @@ export function getToolsByCategory(): Record<string, string[]> {
     skills: [],
     workflows: [],
     triggers: [],
+    plugins: [],
   };
 
   for (const [varName, displayName] of Object.entries(TOOL_NAME_MAP)) {
@@ -266,6 +273,8 @@ export function getToolsByCategory(): Record<string, string[]> {
       categories.workflows.push(displayName);
     } else if (displayName.startsWith("trigger-")) {
       categories.triggers.push(displayName);
+    } else if (displayName.startsWith("plugin-")) {
+      categories.plugins.push(displayName);
     }
   }
 
