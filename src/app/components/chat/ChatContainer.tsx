@@ -1,14 +1,15 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import type { ChatMessage, ToolCall, AgentInfo } from "@/app/hooks/useChat";
-import ToolCard from "@/app/components/ToolCard";
+import type { ChatMessage as ChatMessageType, ToolCall, AgentInfo } from "@/app/hooks/useChat";
+import ChatMessage from "./ChatMessage";
+import ToolChips from "./ToolChip";
 import MessageContent from "@/app/components/MessageContent";
 import ThinkingIndicator from "./ThinkingIndicator";
 import WelcomeScreen from "./WelcomeScreen";
 
 interface ChatContainerProps {
-  messages: ChatMessage[];
+  messages: ChatMessageType[];
   streamingText: string;
   streamingTools: ToolCall[];
   isLoading: boolean;
@@ -43,81 +44,49 @@ export default function ChatContainer({
       {isEmpty ? (
         <WelcomeScreen onSend={onQuickSend} />
       ) : (
-        <div className="max-w-3xl mx-auto px-5 py-5 space-y-4">
+        <div className="max-w-3xl mx-auto px-5 py-5 space-y-1">
           {/* Saved messages */}
           {messages.map((msg, idx) => (
-            <div key={msg.id} className="group/msg">
-              {msg.role === "user" && (
-                <div className="py-3 px-1">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-[10px] font-bold text-white shrink-0">R</div>
-                    <span className="text-[12px] font-medium text-[var(--text-primary)]">You</span>
-                    <span className="text-[10px] text-[var(--text-muted)]">{new Date(msg.timestamp).toLocaleTimeString()}</span>
-                  </div>
-                  <div className="pl-8">
-                    {msg.images && msg.images.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {msg.images.map((img, i) => (
-                          <img key={i} src={img} alt={`Attached ${i + 1}`} className="max-w-[200px] max-h-[150px] rounded-lg border border-gray-200 object-cover" />
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-[13.5px] text-[var(--text-primary)] leading-relaxed">{msg.content}</p>
-                  </div>
-                </div>
-              )}
-              {msg.role === "assistant" && (
-                <div className="py-3 px-1 rounded-xl hover:bg-[var(--bg-hover)] transition-colors">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-[10px] text-white shrink-0">⚡</div>
-                    <span className="text-[12px] font-medium text-[var(--text-primary)]">Karya</span>
-                    <span className="text-[10px] text-[var(--text-muted)]">{new Date(msg.timestamp).toLocaleTimeString()}</span>
-                    {msg.toolCalls && msg.toolCalls.length > 0 && (
-                      <span className="text-[10px] text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded-full font-medium">
-                        ✦ {msg.toolCalls.length} tool{msg.toolCalls.length > 1 ? "s" : ""}
-                      </span>
-                    )}
-                  </div>
-                  <div className="pl-8">
-                    {msg.toolCalls?.map((t, i) => (
-                      <ToolCard key={i} toolName={t.toolName} status={t.status === "done" ? "done" : "error"} args={t.args} result={t.result} />
-                    ))}
-                    {msg.content && <div className="mt-1"><MessageContent content={msg.content} /></div>}
-                    {/* Actions */}
-                    <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity flex items-center gap-0.5 mt-2 -ml-1">
-                      <button onClick={() => navigator.clipboard.writeText(msg.content)}
-                        className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 py-1 rounded-md hover:bg-[var(--bg-secondary)] transition-all">📋 Copy</button>
-                      <button onClick={() => { const prev = messages[idx - 1]; if (prev) onQuickSend(prev.content); }}
-                        className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 py-1 rounded-md hover:bg-[var(--bg-secondary)] transition-all">🔄 Retry</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              onRetry={msg.role === "assistant" && idx > 0 ? () => onQuickSend(messages[idx - 1]?.content || "") : undefined}
+            />
           ))}
 
-          {/* Streaming message */}
+          {/* Currently streaming message */}
           {isStreaming && (
             <div className="py-3 px-1">
+              {/* Header */}
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-[10px] text-white shrink-0">⚡</div>
                 <span className="text-[12px] font-medium text-[var(--text-primary)]">Karya</span>
+                {activeAgent && activeAgent.agent !== "supervisor" && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-500 text-[10px] font-medium border border-purple-500/20">
+                    {({ browser: "🌐 Browser", file: "📁 File", coder: "💻 Coder", researcher: "🔍 Research", "data-analyst": "📊 Data" } as Record<string, string>)[activeAgent.agent] || activeAgent.agent}
+                  </span>
+                )}
                 {streamingTools.length > 0 && (
                   <span className="text-[10px] text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded-full font-medium">
                     ✦ {streamingTools.length} tool{streamingTools.length > 1 ? "s" : ""}
                   </span>
                 )}
               </div>
+
+              {/* Content */}
               <div className="pl-8">
-                {streamingTools.map((t, i) => (
-                  <ToolCard key={i} toolName={t.toolName} status={t.status} args={t.args} result={t.result} />
-                ))}
+                {/* Tool chips */}
+                {streamingTools.length > 0 && <ToolChips tools={streamingTools} />}
+
+                {/* Streaming text */}
                 {streamingText && (
                   <div className="mt-1">
                     <MessageContent content={streamingText} />
                     <span className="inline-block w-0.5 h-4 bg-purple-500 animate-pulse rounded-sm ml-0.5 align-text-bottom" />
                   </div>
                 )}
+
+                {/* Thinking indicator (no text yet, no tools yet) */}
                 {isLoading && !streamingText && streamingTools.length === 0 && (
                   <ThinkingIndicator agent={activeAgent} currentTool={streamingTools[streamingTools.length - 1]?.toolName} />
                 )}
