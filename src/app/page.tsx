@@ -151,11 +151,16 @@ export default function Home() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header
           sessions={sessions} activeId={activeId} currentSession={currentSession}
+          messageCount={messages.length}
           isLoading={isLoading} streamingTools={streamingTools} streamingText={streamingText}
-          activeAgent={activeAgent} sidebarOpen={sidebarOpen}
+          activeAgent={activeAgent}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} onSwitchSession={switchSession}
           onNewSession={newSession} onClearChat={clearChat}
           onDeleteSession={() => delSession(activeId)} onCancelRequest={cancelRequest}
+          onRenameSession={async (name) => {
+            try { await fetch("/api/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rename", id: activeId, name }) }); loadSessions(); } catch {}
+          }}
+          onExportChat={exportChat}
         />
 
         <ChatContainer
