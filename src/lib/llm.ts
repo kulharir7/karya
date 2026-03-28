@@ -27,7 +27,7 @@ import * as path from "path";
 // Config file path
 const CONFIG_PATH = path.join(process.cwd(), "karya-config.json");
 
-export type LLMProvider = "anthropic" | "openai" | "google" | "openrouter" | "ollama" | "custom";
+export type LLMProvider = "anthropic" | "openai" | "google" | "openrouter" | "ollama" | "ollama-cloud" | "custom";
 export type AnthropicAuthMethod = "api-key" | "setup-token";
 export type CacheRetention = "none" | "short" | "long";
 
@@ -109,7 +109,7 @@ function loadConfig(): LLMConfig {
       openrouter: process.env.OPENROUTER_API_KEY || "",
     },
     customProvider: process.env.LLM_BASE_URL ? {
-      name: process.env.CUSTOM_PROVIDER_NAME || "custom",
+      name: process.env.LLM_PROVIDER || process.env.CUSTOM_PROVIDER_NAME || "custom",
       baseURL: process.env.LLM_BASE_URL,
       apiKey: process.env.LLM_API_KEY || "",
     } : undefined,
@@ -268,6 +268,18 @@ export function getModel(): any {
       return ollama(model);
     }
 
+    case "ollama-cloud": {
+      // Ollama Cloud — remote Ollama API (ollama.com/v1)
+      const baseURL = customProvider.baseURL || process.env.LLM_BASE_URL || "https://ollama.com/v1";
+      const apiKey = customProvider.apiKey || process.env.LLM_API_KEY || "ollama";
+      const ollamaCloud = createOpenAICompatible({
+        name: "ollama-cloud",
+        baseURL,
+        apiKey,
+      });
+      return ollamaCloud(model);
+    }
+
     case "custom": {
       if (!customProvider.baseURL) {
         throw new Error("Custom provider baseURL not configured.");
@@ -325,6 +337,13 @@ export const PROVIDER_MODELS: Record<LLMProvider, { id: string; name: string; de
     { id: "deepseek-coder-v2", name: "DeepSeek Coder", description: "💻 Code" },
     { id: "mistral", name: "Mistral", description: "⚡ Fast" },
   ],
+  "ollama-cloud": [
+    { id: "qwen3-coder:480b", name: "Qwen 3 Coder 480B", description: "💻 Code specialist (cloud)" },
+    { id: "gpt-oss:120b", name: "GPT-OSS 120B", description: "🧠 General purpose (cloud)" },
+    { id: "kimi-k2.5:cloud", name: "Kimi K2.5", description: "⚡ Fast (cloud)" },
+    { id: "llama3.3:cloud", name: "Llama 3.3", description: "🦙 Open source (cloud)" },
+    { id: "deepseek-r1:cloud", name: "DeepSeek R1", description: "🧠 Reasoning (cloud)" },
+  ],
   custom: [],
 };
 
@@ -381,7 +400,10 @@ export function hasValidAuth(provider: LLMProvider): boolean {
     return !!(config.apiKeys.anthropic || config.anthropic?.setupToken);
   }
   if (provider === "ollama") {
-    return true; // No auth needed
+    return true; // No auth needed for local
+  }
+  if (provider === "ollama-cloud") {
+    return !!(config.customProvider.baseURL || process.env.LLM_BASE_URL);
   }
   if (provider === "custom") {
     return !!config.customProvider.baseURL;

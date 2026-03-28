@@ -1,0 +1,13 @@
+[
+  {
+    "token": "karya_28bd5e5852fffed51aca1892aa48e817cd546957b43d461e",
+    "name": "test-cli",
+    "createdAt": 1774687837956,
+    "expiresAt": 0,
+    "lastUsedAt": 0,
+    "requestCount": 0,
+    "scopes": [
+      "*"
+    ]
+  }
+]

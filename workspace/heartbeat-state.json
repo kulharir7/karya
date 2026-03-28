@@ -1,0 +1,40 @@
+{
+  "tasks": {
+    "hb-system-health-check": {
+      "lastRunAt": null,
+      "nextRunAt": null,
+      "runCount": 0,
+      "lastError": null,
+      "lastSuccess": true
+    },
+    "hb-daily-briefing": {
+      "lastRunAt": null,
+      "nextRunAt": null,
+      "runCount": 0,
+      "lastError": null,
+      "lastSuccess": true
+    },
+    "hb-git-status-check": {
+      "lastRunAt": null,
+      "nextRunAt": null,
+      "runCount": 0,
+      "lastError": null,
+      "lastSuccess": true
+    },
+    "hb-downloads-cleanup-reminder": {
+      "lastRunAt": null,
+      "nextRunAt": null,
+      "runCount": 0,
+      "lastError": null,
+      "lastSuccess": true
+    },
+    "hb-memory-review": {
+      "lastRunAt": null,
+      "nextRunAt": null,
+      "runCount": 0,
+      "lastError": null,
+      "lastSuccess": true
+    }
+  },
+  "lastReload": 1774687846247
+}

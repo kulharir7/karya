@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-type LLMProvider = "anthropic" | "openai" | "google" | "openrouter" | "ollama" | "custom";
+type LLMProvider = "anthropic" | "openai" | "google" | "openrouter" | "ollama" | "ollama-cloud" | "custom";
 
 interface SettingsConfig {
   provider: LLMProvider;
@@ -28,6 +28,7 @@ const PROVIDER_INFO: Record<LLMProvider, { name: string; icon: string; descripti
   google: { name: "Google", icon: "✨", description: "Gemini models" },
   openrouter: { name: "OpenRouter", icon: "🌐", description: "All models, one key" },
   ollama: { name: "Ollama", icon: "🦙", description: "Local models" },
+  "ollama-cloud": { name: "Ollama Cloud", icon: "☁️", description: "Remote Ollama (ollama.com)" },
   custom: { name: "Custom", icon: "⚙️", description: "OpenAI-compatible" },
 };
 
@@ -58,6 +59,12 @@ const PROVIDER_MODELS: Record<LLMProvider, { id: string; name: string; descripti
   ollama: [
     { id: "llama3.3", name: "Llama 3.3", description: "🦙 Local" },
     { id: "qwen2.5-coder:32b", name: "Qwen Coder", description: "💻 Code" },
+  ],
+  "ollama-cloud": [
+    { id: "qwen3-coder:480b", name: "Qwen 3 Coder 480B", description: "💻 Code (cloud)" },
+    { id: "gpt-oss:120b", name: "GPT-OSS 120B", description: "🧠 General (cloud)" },
+    { id: "kimi-k2.5:cloud", name: "Kimi K2.5", description: "⚡ Fast (cloud)" },
+    { id: "deepseek-r1:cloud", name: "DeepSeek R1", description: "🧠 Reasoning (cloud)" },
   ],
   custom: [],
 };

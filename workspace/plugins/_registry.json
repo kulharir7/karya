@@ -1,0 +1,32 @@
+[
+  {
+    "id": "calculator",
+    "enabled": true,
+    "source": "plugins"
+  },
+  {
+    "id": "github",
+    "enabled": true,
+    "source": "plugins"
+  },
+  {
+    "id": "weather",
+    "enabled": true,
+    "source": "plugins"
+  },
+  {
+    "id": "email",
+    "enabled": true,
+    "source": "skills"
+  },
+  {
+    "id": "twitter",
+    "enabled": true,
+    "source": "skills"
+  },
+  {
+    "id": "youtube",
+    "enabled": true,
+    "source": "skills"
+  }
+]
