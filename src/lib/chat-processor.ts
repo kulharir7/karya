@@ -26,6 +26,7 @@ import {
 import { eventBus } from "@/lib/event-bus";
 import { getWorkspaceContext, initWorkspace, logToDaily } from "@/lib/memory-engine";
 import { getRelevantLessons, runSelfReview } from "@/lib/self-improving";
+import { getActivePluginSkills, matchPlugins, loadPluginSkill } from "@/lib/plugin-registry";
 
 // ============================================
 // TYPES
@@ -287,6 +288,12 @@ export function getToolsByCategory(): Record<string, string[]> {
 }
 
 // ============================================
+// PLUGIN LOADING FLAG
+// ============================================
+
+let pluginsLoaded = false;
+
+// ============================================
 // MCP CACHE
 // ============================================
 
@@ -375,6 +382,18 @@ export async function processChat(
 
   // ---- 3. Build context ----
   initWorkspace();
+
+  // Auto-load plugins on first chat (lazy init)
+  if (!pluginsLoaded) {
+    try {
+      const { loadAllPlugins } = await import("@/lib/plugin-registry");
+      await loadAllPlugins();
+      pluginsLoaded = true;
+    } catch {
+      // Non-critical
+    }
+  }
+
   const workspaceContext = getWorkspaceContext();
 
   const recentMessages = await getRecentMessages(sessionId, contextWindow);
@@ -395,6 +414,35 @@ export async function processChat(
       role: "system",
       content: lessons,
     });
+  }
+
+  // Inject active plugin skills (Phase 6)
+  // First: check if any plugins match this specific query
+  const matchedPlugins = matchPlugins(message);
+  if (matchedPlugins.length > 0) {
+    // Load full SKILL.md for matched plugins (targeted injection)
+    const matchedSkills: string[] = [];
+    for (const mp of matchedPlugins.slice(0, 2)) { // Max 2 matched skills
+      const skill = loadPluginSkill(mp.id);
+      if (skill) {
+        matchedSkills.push(`### Plugin: ${mp.manifest.name}\n${skill}`);
+      }
+    }
+    if (matchedSkills.length > 0) {
+      contextMessages.push({
+        role: "system",
+        content: `## 🔌 Matched Plugins for This Task\n\n${matchedSkills.join("\n\n---\n\n")}`,
+      });
+    }
+  } else {
+    // No specific match — inject catalog summary (lightweight)
+    const pluginSkills = getActivePluginSkills();
+    if (pluginSkills) {
+      contextMessages.push({
+        role: "system",
+        content: pluginSkills,
+      });
+    }
   }
 
   // Chat history (excluding current message — we add it below with images)

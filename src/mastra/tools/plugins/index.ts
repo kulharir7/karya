@@ -38,7 +38,8 @@ export const pluginListTool = createTool({
         description: p.manifest.description,
         enabled: p.enabled,
         hasSkill: p.hasSkill,
-        hasTools: p.hasTools,
+        triggers: p.triggers,
+        source: p.source,
         error: p.loadError || undefined,
       })),
       stats,
@@ -64,7 +65,7 @@ The user can then customize the files.`,
     const result = scaffoldPlugin(
       input.name,
       input.description || "",
-      input.withTools || false
+      { triggers: input.withTools ? [input.name.toLowerCase()] : undefined }
     );
 
     if (!result.success) {

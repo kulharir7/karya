@@ -1,46 +1,36 @@
 /**
- * Karya Plugin Registry — Discovery, installation, and auto-loading
+ * Karya Plugin Registry — UNIFIED skill + plugin system
+ * 
+ * Phase 6 DEEP REWRITE:
+ * 
+ * Before: Two separate systems that didn't talk:
+ *   - skill-engine.ts → workspace/skills/ (SKILL.md only, no tools, no lifecycle)
+ *   - plugin-api.ts → in-memory registration (no disk, no auto-load)
+ *   - plugin-loader.ts → reads skills again with gray-matter (duplicate)
+ *   
+ * Now: ONE unified system:
+ *   - workspace/plugins/ is the ONLY plugin directory
+ *   - Each plugin has plugin.json (manifest) + SKILL.md (instructions)
+ *   - Skills auto-injected into agent context on every turn
+ *   - Plugin lifecycle: load → validate config → inject skills → register hooks
+ *   - Auto-load on startup, file watcher for hot-reload
+ *   - Registry persisted in _registry.json
  * 
  * Plugin structure:
- *   workspace/plugins/<plugin-name>/
- *   ├── plugin.json          — Manifest (name, version, description, tools, hooks)
- *   ├── SKILL.md             — Optional agent instructions (loaded into context)
- *   ├── tools.ts             — Tool definitions (dynamic import)
- *   └── README.md            — Optional documentation
+ *   workspace/plugins/<name>/
+ *   ├── plugin.json    — Manifest (required for full plugins, optional for skill-only)
+ *   ├── SKILL.md       — Agent instructions (loaded into context when enabled)
+ *   └── README.md      — Documentation (optional)
  * 
- * plugin.json format:
- * {
- *   "name": "github",
- *   "version": "1.0.0",
- *   "description": "GitHub operations — repos, issues, PRs",
- *   "author": "Ravi",
- *   "tools": ["github-create-issue", "github-list-repos"],
- *   "triggers": ["github", "repo", "issue", "PR"],
- *   "hooks": { "before_tool_call": true },
- *   "dependencies": [],
- *   "config": { "GITHUB_TOKEN": { "required": true, "description": "GitHub personal access token" } }
- * }
- * 
- * Auto-loading:
- *   On startup, scans workspace/plugins/ and loads all plugins with plugin.json
- *   Plugin tools get injected into the supervisor agent via MCP toolsets
- * 
- * Install from URL:
- *   karya plugin install https://github.com/user/karya-plugin-github.git
- *   karya plugin install ./my-local-plugin
+ * Backward compatible:
+ *   - workspace/skills/ still scanned (legacy, read-only)
+ *   - Plugins without plugin.json treated as skill-only
  */
 
 import * as fs from "fs";
 import * as path from "path";
 import { logger } from "./logger";
 import { eventBus } from "./event-bus";
-import {
-  createPlugin,
-  getPlugins,
-  unregisterPlugin,
-  type PluginMeta,
-  type Plugin,
-} from "./plugin-api";
 
 // ============================================
 // TYPES
@@ -51,22 +41,43 @@ export interface PluginManifest {
   version: string;
   description: string;
   author?: string;
-  tools?: string[];
+  /** Keywords that activate this plugin's skill */
   triggers?: string[];
-  hooks?: Record<string, boolean>;
+  /** Environment variables this plugin needs */
+  config?: Record<string, {
+    required?: boolean;
+    description?: string;
+    default?: any;
+  }>;
+  /** Event bus hooks this plugin listens to */
+  hooks?: string[];
+  /** Other plugins this depends on */
   dependencies?: string[];
-  config?: Record<string, { required?: boolean; description?: string; default?: any }>;
+  /** Priority for skill matching (higher = checked first) */
+  priority?: number;
 }
 
 export interface InstalledPlugin {
   id: string;
   manifest: PluginManifest;
-  path: string;
+  /** Absolute path to plugin directory */
+  dirPath: string;
+  /** Whether this plugin is enabled */
   enabled: boolean;
+  /** Does this plugin have a SKILL.md? */
   hasSkill: boolean;
-  hasTools: boolean;
+  /** Parsed SKILL.md content (body without frontmatter) */
+  skillContent: string;
+  /** Trigger keywords (from manifest + skill frontmatter) */
+  triggers: string[];
+  /** When the plugin was first loaded */
   installedAt: number;
-  loadError?: string;
+  /** Last error during loading */
+  loadError: string | null;
+  /** Config validation results */
+  configStatus: Record<string, { present: boolean; required: boolean }>;
+  /** Source: 'plugins' or 'skills' (legacy) */
+  source: "plugins" | "skills";
 }
 
 // ============================================
@@ -74,216 +85,379 @@ export interface InstalledPlugin {
 // ============================================
 
 const PLUGINS_DIR = path.join(process.cwd(), "workspace", "plugins");
+const LEGACY_SKILLS_DIR = path.join(process.cwd(), "workspace", "skills");
 const REGISTRY_FILE = path.join(PLUGINS_DIR, "_registry.json");
 
 // ============================================
 // STATE
 // ============================================
 
-const installedPlugins = new Map<string, InstalledPlugin>();
+const plugins = new Map<string, InstalledPlugin>();
+let initialized = false;
+let fileWatcher: fs.FSWatcher | null = null;
 
 // ============================================
 // INITIALIZATION
 // ============================================
 
-/**
- * Ensure plugins directory exists.
- */
-function ensurePluginsDir(): void {
+function ensureDirs(): void {
   if (!fs.existsSync(PLUGINS_DIR)) {
     fs.mkdirSync(PLUGINS_DIR, { recursive: true });
   }
 }
 
 /**
- * Scan and auto-load all plugins from workspace/plugins/.
- * Called once on startup.
+ * Scan and load ALL plugins from:
+ * 1. workspace/plugins/ (new format with plugin.json)
+ * 2. workspace/skills/ (legacy format, SKILL.md only)
+ * 
+ * Call this once on startup.
  */
 export async function loadAllPlugins(): Promise<{
   loaded: string[];
   failed: Array<{ id: string; error: string }>;
 }> {
-  ensurePluginsDir();
-
+  ensureDirs();
   const loaded: string[] = [];
   const failed: Array<{ id: string; error: string }> = [];
 
-  try {
-    const entries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true });
+  // Load saved enabled/disabled states
+  const savedStates = loadRegistryStates();
 
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (entry.name.startsWith("_")) continue; // Skip internal files
+  // ---- 1. Scan workspace/plugins/ ----
+  if (fs.existsSync(PLUGINS_DIR)) {
+    for (const entry of fs.readdirSync(PLUGINS_DIR, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith("_")) continue;
 
-      const pluginPath = path.join(PLUGINS_DIR, entry.name);
-      const result = await loadPlugin(entry.name, pluginPath);
+      const result = loadSinglePlugin(
+        entry.name,
+        path.join(PLUGINS_DIR, entry.name),
+        "plugins",
+        savedStates
+      );
 
       if (result.success) {
         loaded.push(entry.name);
       } else {
-        failed.push({ id: entry.name, error: result.error || "Unknown error" });
+        failed.push({ id: entry.name, error: result.error! });
       }
     }
-  } catch (err: any) {
-    logger.error("plugin-registry", `Failed to scan plugins: ${err.message}`);
   }
 
-  logger.info("plugin-registry", `Loaded ${loaded.length} plugins (${failed.length} failed)`);
-  saveRegistry();
+  // ---- 2. Scan workspace/skills/ (legacy) ----
+  if (fs.existsSync(LEGACY_SKILLS_DIR)) {
+    for (const entry of fs.readdirSync(LEGACY_SKILLS_DIR, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+
+      const skillPath = path.join(LEGACY_SKILLS_DIR, entry.name);
+      const skillFile = path.join(skillPath, "SKILL.md");
+      if (!fs.existsSync(skillFile)) continue;
+
+      // Don't override if already loaded from plugins/
+      if (plugins.has(entry.name)) continue;
+
+      const result = loadSinglePlugin(
+        entry.name,
+        skillPath,
+        "skills",
+        savedStates
+      );
+
+      if (result.success) {
+        loaded.push(`${entry.name} (legacy)`);
+      }
+    }
+  }
+
+  // Start file watcher for hot-reload
+  watchPluginsDir();
+
+  initialized = true;
+  saveRegistryStates();
+
+  logger.info(
+    "plugin-registry",
+    `Loaded ${loaded.length} plugins, ${failed.length} failed: [${loaded.join(", ")}]`
+  );
+
   return { loaded, failed };
 }
 
 /**
  * Load a single plugin from its directory.
  */
-async function loadPlugin(
+function loadSinglePlugin(
   id: string,
-  pluginPath: string
-): Promise<{ success: boolean; error?: string }> {
-  // Read manifest
-  const manifestPath = path.join(pluginPath, "plugin.json");
-
-  if (!fs.existsSync(manifestPath)) {
-    // No manifest — try SKILL.md only (legacy skill format)
-    const skillPath = path.join(pluginPath, "SKILL.md");
-    if (fs.existsSync(skillPath)) {
-      // Register as skill-only plugin
-      installedPlugins.set(id, {
-        id,
-        manifest: { name: id, version: "0.0.0", description: "Skill-only plugin (no plugin.json)" },
-        path: pluginPath,
-        enabled: true,
-        hasSkill: true,
-        hasTools: false,
-        installedAt: Date.now(),
-      });
-      return { success: true };
-    }
-    return { success: false, error: "No plugin.json or SKILL.md found" };
-  }
-
+  dirPath: string,
+  source: "plugins" | "skills",
+  savedStates: Record<string, boolean>
+): { success: boolean; error?: string } {
   try {
-    const manifestRaw = fs.readFileSync(manifestPath, "utf-8");
-    const manifest: PluginManifest = JSON.parse(manifestRaw);
+    // ---- Read manifest (optional) ----
+    let manifest: PluginManifest = {
+      name: id,
+      version: "0.0.0",
+      description: "",
+    };
 
-    if (!manifest.name || !manifest.version) {
-      return { success: false, error: "plugin.json missing name or version" };
-    }
-
-    const hasSkill = fs.existsSync(path.join(pluginPath, "SKILL.md"));
-    const hasTools = fs.existsSync(path.join(pluginPath, "tools.ts")) ||
-                     fs.existsSync(path.join(pluginPath, "tools.js"));
-
-    // Register in plugin-api (for tools/hooks)
-    if (hasTools) {
+    const manifestPath = path.join(dirPath, "plugin.json");
+    if (fs.existsSync(manifestPath)) {
       try {
-        // Dynamic import of tools file
-        const toolsPath = path.join(pluginPath, "tools");
-        const toolsModule = await import(toolsPath);
-
-        if (toolsModule.default && typeof toolsModule.default === "function") {
-          // Plugin exports a register function
-          toolsModule.default();
-        } else if (toolsModule.plugin) {
-          // Plugin exports a pre-built plugin
-          toolsModule.plugin.register();
-        }
-      } catch (toolErr: any) {
-        logger.warn("plugin-registry", `Plugin ${id} tools failed to load: ${toolErr.message}`);
-        // Still register the plugin (skill might work)
+        const raw = fs.readFileSync(manifestPath, "utf-8");
+        manifest = { ...manifest, ...JSON.parse(raw) };
+      } catch (err: any) {
+        return { success: false, error: `Invalid plugin.json: ${err.message}` };
       }
     }
 
-    installedPlugins.set(id, {
+    // ---- Read SKILL.md ----
+    let skillContent = "";
+    let hasSkill = false;
+    let skillTriggers: string[] = [];
+
+    const skillPath = path.join(dirPath, "SKILL.md");
+    if (fs.existsSync(skillPath)) {
+      const raw = fs.readFileSync(skillPath, "utf-8");
+      hasSkill = true;
+
+      // Parse frontmatter
+      const fmMatch = raw.match(/^---\n([\s\S]*?)\n---/);
+      if (fmMatch) {
+        const fm = fmMatch[1];
+        skillContent = raw.slice(fmMatch[0].length).trim();
+
+        // Extract triggers from frontmatter
+        const trigLine = fm.match(/triggers:\s*(.+)/i)?.[1] || "";
+        skillTriggers = trigLine.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+
+        // Use frontmatter description if manifest doesn't have one
+        if (!manifest.description) {
+          manifest.description = fm.match(/description:\s*(.+)/i)?.[1]?.trim() || "";
+        }
+      } else {
+        skillContent = raw.trim();
+      }
+    }
+
+    if (!hasSkill && !fs.existsSync(manifestPath)) {
+      return { success: false, error: "No plugin.json or SKILL.md found" };
+    }
+
+    // ---- Merge triggers ----
+    const triggers = [
+      ...new Set([
+        ...(manifest.triggers || []).map((t) => t.toLowerCase()),
+        ...skillTriggers,
+        id.toLowerCase(), // Plugin name itself is always a trigger
+      ]),
+    ];
+
+    // ---- Validate config ----
+    const configStatus: Record<string, { present: boolean; required: boolean }> = {};
+    if (manifest.config) {
+      for (const [key, def] of Object.entries(manifest.config)) {
+        configStatus[key] = {
+          present: !!process.env[key],
+          required: !!def.required,
+        };
+      }
+    }
+
+    // ---- Check missing required config ----
+    const missingRequired = Object.entries(configStatus)
+      .filter(([, v]) => v.required && !v.present)
+      .map(([k]) => k);
+
+    if (missingRequired.length > 0) {
+      logger.warn(
+        "plugin-registry",
+        `Plugin ${id}: missing required config: ${missingRequired.join(", ")}`
+      );
+    }
+
+    // ---- Determine enabled state ----
+    const enabled = savedStates[id] !== undefined ? savedStates[id] : true;
+
+    // ---- Register ----
+    plugins.set(id, {
       id,
       manifest,
-      path: pluginPath,
-      enabled: true,
+      dirPath,
+      enabled,
       hasSkill,
-      hasTools,
+      skillContent,
+      triggers,
       installedAt: Date.now(),
+      loadError: null,
+      configStatus,
+      source,
     });
-
-    logger.info("plugin-registry", `Loaded: ${manifest.name} v${manifest.version}`);
-    await eventBus.emit("plugin:loaded", { id, name: manifest.name, version: manifest.version });
 
     return { success: true };
   } catch (err: any) {
-    installedPlugins.set(id, {
+    plugins.set(id, {
       id,
       manifest: { name: id, version: "?", description: "Failed to load" },
-      path: pluginPath,
+      dirPath,
       enabled: false,
       hasSkill: false,
-      hasTools: false,
+      skillContent: "",
+      triggers: [],
       installedAt: Date.now(),
       loadError: err.message,
+      configStatus: {},
+      source,
     });
     return { success: false, error: err.message };
   }
 }
 
 // ============================================
-// INSTALL / UNINSTALL
+// CONTEXT INJECTION (THE IMPORTANT PART)
 // ============================================
 
 /**
- * Install a plugin from a local directory path.
- * Copies the directory into workspace/plugins/.
+ * Get ALL enabled plugin skills for agent context injection.
+ * 
+ * This is called by ChatProcessor in Step 3 (context building).
+ * Returns formatted text with all active plugin instructions.
  */
-export async function installFromPath(sourcePath: string): Promise<{
-  success: boolean;
-  pluginId?: string;
-  error?: string;
-}> {
-  ensurePluginsDir();
+export function getActivePluginSkills(): string {
+  const sections: string[] = [];
 
-  if (!fs.existsSync(sourcePath)) {
-    return { success: false, error: `Path not found: ${sourcePath}` };
+  const enabledPlugins = Array.from(plugins.values())
+    .filter((p) => p.enabled && p.hasSkill && p.skillContent)
+    .sort((a, b) => (b.manifest.priority || 0) - (a.manifest.priority || 0));
+
+  if (enabledPlugins.length === 0) return "";
+
+  sections.push("## 🔌 Active Plugins\n");
+  sections.push("The following plugins are installed. Use their instructions when relevant:\n");
+
+  for (const plugin of enabledPlugins) {
+    sections.push(`### ${plugin.manifest.name || plugin.id}`);
+    if (plugin.manifest.description) {
+      sections.push(`_${plugin.manifest.description}_`);
+    }
+    sections.push(`Triggers: ${plugin.triggers.join(", ")}\n`);
+    // Truncate very long skills
+    const maxSkillChars = 2000;
+    const content = plugin.skillContent.length > maxSkillChars
+      ? plugin.skillContent.slice(0, maxSkillChars) + "\n\n_[...truncated, use skill-load for full content]_"
+      : plugin.skillContent;
+    sections.push(content);
+    sections.push("\n---\n");
   }
 
-  // Determine plugin name from directory or manifest
-  let pluginId = path.basename(sourcePath);
-  const manifestPath = path.join(sourcePath, "plugin.json");
-  if (fs.existsSync(manifestPath)) {
-    try {
-      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
-      if (manifest.name) pluginId = manifest.name;
-    } catch { }
-  }
-
-  const destPath = path.join(PLUGINS_DIR, pluginId);
-
-  // Don't overwrite
-  if (fs.existsSync(destPath)) {
-    return { success: false, error: `Plugin ${pluginId} already installed. Uninstall first.` };
-  }
-
-  try {
-    // Copy directory
-    copyDirSync(sourcePath, destPath);
-
-    // Load the plugin
-    const result = await loadPlugin(pluginId, destPath);
-    saveRegistry();
-
-    return { success: result.success, pluginId, error: result.error };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
+  return sections.join("\n");
 }
 
 /**
- * Create a new plugin scaffold in workspace/plugins/.
+ * Find plugins matching a user query.
+ * Returns ranked list of matching plugins.
+ */
+export function matchPlugins(query: string): InstalledPlugin[] {
+  const queryLower = query.toLowerCase();
+  const queryWords = queryLower.split(/\s+/).filter((w) => w.length > 2);
+
+  const scored: Array<{ plugin: InstalledPlugin; score: number }> = [];
+
+  for (const plugin of plugins.values()) {
+    if (!plugin.enabled) continue;
+
+    let score = 0;
+
+    // Trigger match (highest priority)
+    for (const trigger of plugin.triggers) {
+      if (queryLower.includes(trigger)) score += 10;
+      for (const word of queryWords) {
+        if (trigger.includes(word) || word.includes(trigger)) score += 3;
+      }
+    }
+
+    // Name match
+    if (queryLower.includes(plugin.id)) score += 8;
+
+    // Description match
+    const desc = plugin.manifest.description?.toLowerCase() || "";
+    for (const word of queryWords) {
+      if (desc.includes(word)) score += 2;
+    }
+
+    // Skill content match (light — just first 500 chars)
+    const skillPreview = plugin.skillContent.slice(0, 500).toLowerCase();
+    for (const word of queryWords) {
+      if (skillPreview.includes(word)) score += 1;
+    }
+
+    if (score > 0) {
+      scored.push({ plugin, score });
+    }
+  }
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map((s) => s.plugin);
+}
+
+/**
+ * Load a specific plugin's full SKILL.md content.
+ * Used by skill-load tool.
+ */
+export function loadPluginSkill(pluginId: string): string | null {
+  const plugin = plugins.get(pluginId);
+  if (!plugin || !plugin.hasSkill) {
+    // Also check legacy skills dir
+    const legacyPath = path.join(LEGACY_SKILLS_DIR, pluginId, "SKILL.md");
+    if (fs.existsSync(legacyPath)) {
+      return fs.readFileSync(legacyPath, "utf-8");
+    }
+    return null;
+  }
+
+  // Re-read from disk (in case it was edited)
+  const skillPath = path.join(plugin.dirPath, "SKILL.md");
+  if (!fs.existsSync(skillPath)) return null;
+
+  try {
+    return fs.readFileSync(skillPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+// ============================================
+// CRUD OPERATIONS
+// ============================================
+
+export function listInstalledPlugins(): InstalledPlugin[] {
+  return Array.from(plugins.values());
+}
+
+export function getInstalledPlugin(id: string): InstalledPlugin | undefined {
+  return plugins.get(id);
+}
+
+export function togglePluginEnabled(id: string, enabled?: boolean): boolean {
+  const plugin = plugins.get(id);
+  if (!plugin) return false;
+  plugin.enabled = enabled !== undefined ? enabled : !plugin.enabled;
+  saveRegistryStates();
+  return true;
+}
+
+/**
+ * Create a new plugin scaffold.
  */
 export function scaffoldPlugin(
   name: string,
   description: string = "",
-  withTools: boolean = false
+  options: { withTools?: boolean; triggers?: string[] } = {}
 ): { success: boolean; path?: string; error?: string } {
-  ensurePluginsDir();
+  ensureDirs();
 
-  const pluginId = name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const pluginId = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const pluginPath = path.join(PLUGINS_DIR, pluginId);
 
   if (fs.existsSync(pluginPath)) {
@@ -299,8 +473,7 @@ export function scaffoldPlugin(
       version: "1.0.0",
       description: description || `${name} plugin for Karya`,
       author: "User",
-      tools: [],
-      triggers: [pluginId],
+      triggers: options.triggers || [pluginId],
     };
     fs.writeFileSync(
       path.join(pluginPath, "plugin.json"),
@@ -309,12 +482,13 @@ export function scaffoldPlugin(
     );
 
     // SKILL.md
+    const triggers = (options.triggers || [pluginId]).join(", ");
     fs.writeFileSync(
       path.join(pluginPath, "SKILL.md"),
       `---
 name: ${name}
 description: ${description || `${name} plugin`}
-triggers: ${pluginId}
+triggers: ${triggers}
 ---
 
 # ${name}
@@ -325,65 +499,29 @@ Instructions for the agent when this plugin is activated.
 
 (Describe what the agent should do when this skill is triggered)
 
+## How To Use
+
+(Step-by-step instructions, API endpoints, CLI commands, etc.)
+
 ## Examples
 
 - "Use ${pluginId} to ..."
+- "Show me ..."
 `,
       "utf-8"
     );
-
-    // tools.ts (optional)
-    if (withTools) {
-      fs.writeFileSync(
-        path.join(pluginPath, "tools.ts"),
-        `/**
- * ${name} Plugin Tools
- * 
- * Export a register function or a pre-built plugin.
- */
-
-import { createPlugin } from "../../src/lib/plugin-api";
-import { z } from "zod";
-
-export const plugin = createPlugin({
-  id: "${pluginId}",
-  name: "${name}",
-  version: "1.0.0",
-  description: "${description || `${name} plugin`}",
-})
-  .tool({
-    id: "${pluginId}-example",
-    description: "Example tool for ${name}",
-    inputSchema: z.object({
-      input: z.string().describe("Input text"),
-    }),
-    execute: async ({ input }) => {
-      return { result: \`Processed: \${input}\` };
-    },
-  })
-  .register();
-`,
-        "utf-8"
-      );
-    }
 
     // README.md
     fs.writeFileSync(
       path.join(pluginPath, "README.md"),
-      `# ${name} Plugin
-
-${description || `A Karya plugin for ${name}.`}
-
-## Installation
-
-Copy this folder to \`workspace/plugins/\` in your Karya installation.
-
-## Configuration
-
-(Add any required environment variables or settings here)
-`,
+      `# ${name} Plugin\n\n${description || `A Karya plugin for ${name}.`}\n\n## Installation\n\nAlready installed in workspace/plugins/.\n`,
       "utf-8"
     );
+
+    // Reload to pick up new plugin
+    const savedStates = loadRegistryStates();
+    loadSinglePlugin(pluginId, pluginPath, "plugins", savedStates);
+    saveRegistryStates();
 
     return { success: true, path: pluginPath };
   } catch (err: any) {
@@ -392,27 +530,62 @@ Copy this folder to \`workspace/plugins/\` in your Karya installation.
 }
 
 /**
- * Uninstall a plugin (removes from disk).
+ * Install plugin from a local path (copy into workspace/plugins/).
  */
-export function uninstallPlugin(pluginId: string): { success: boolean; error?: string } {
-  const plugin = installedPlugins.get(pluginId);
-  if (!plugin) {
-    return { success: false, error: "Plugin not found" };
+export async function installFromPath(sourcePath: string): Promise<{
+  success: boolean;
+  pluginId?: string;
+  error?: string;
+}> {
+  ensureDirs();
+
+  if (!fs.existsSync(sourcePath)) {
+    return { success: false, error: `Path not found: ${sourcePath}` };
+  }
+
+  let pluginId = path.basename(sourcePath);
+  const manifestPath = path.join(sourcePath, "plugin.json");
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const m = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      if (m.name) pluginId = m.name;
+    } catch { }
+  }
+
+  const destPath = path.join(PLUGINS_DIR, pluginId);
+  if (fs.existsSync(destPath)) {
+    return { success: false, error: `Plugin ${pluginId} already installed` };
   }
 
   try {
-    // Unregister from plugin-api
-    unregisterPlugin(pluginId);
+    copyDirSync(sourcePath, destPath);
+    const savedStates = loadRegistryStates();
+    const result = loadSinglePlugin(pluginId, destPath, "plugins", savedStates);
+    saveRegistryStates();
+    return { success: result.success, pluginId, error: result.error };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
 
-    // Remove from disk
-    if (fs.existsSync(plugin.path)) {
-      fs.rmSync(plugin.path, { recursive: true, force: true });
+/**
+ * Uninstall a plugin (remove from disk).
+ */
+export function uninstallPlugin(pluginId: string): { success: boolean; error?: string } {
+  const plugin = plugins.get(pluginId);
+  if (!plugin) return { success: false, error: "Plugin not found" };
+
+  // Don't allow deleting legacy skills
+  if (plugin.source === "skills") {
+    return { success: false, error: "Cannot uninstall legacy skills (workspace/skills/). Delete manually." };
+  }
+
+  try {
+    if (fs.existsSync(plugin.dirPath)) {
+      fs.rmSync(plugin.dirPath, { recursive: true, force: true });
     }
-
-    // Remove from registry
-    installedPlugins.delete(pluginId);
-    saveRegistry();
-
+    plugins.delete(pluginId);
+    saveRegistryStates();
     logger.info("plugin-registry", `Uninstalled: ${pluginId}`);
     return { success: true };
   } catch (err: any) {
@@ -421,109 +594,84 @@ export function uninstallPlugin(pluginId: string): { success: boolean; error?: s
 }
 
 // ============================================
-// QUERY
+// STATS
 // ============================================
 
-/**
- * List all installed plugins.
- */
-export function listInstalledPlugins(): InstalledPlugin[] {
-  return Array.from(installedPlugins.values());
-}
-
-/**
- * Get a specific installed plugin.
- */
-export function getInstalledPlugin(id: string): InstalledPlugin | undefined {
-  return installedPlugins.get(id);
-}
-
-/**
- * Enable or disable a plugin.
- */
-export function togglePluginEnabled(id: string, enabled?: boolean): boolean {
-  const plugin = installedPlugins.get(id);
-  if (!plugin) return false;
-
-  plugin.enabled = enabled !== undefined ? enabled : !plugin.enabled;
-  saveRegistry();
-  return true;
-}
-
-/**
- * Get plugin stats.
- */
 export function getPluginRegistryStats(): {
   total: number;
   enabled: number;
   withSkills: number;
-  withTools: number;
+  fromPlugins: number;
+  fromLegacySkills: number;
   failed: number;
+  configIssues: number;
 } {
-  const all = Array.from(installedPlugins.values());
+  const all = Array.from(plugins.values());
   return {
     total: all.length,
     enabled: all.filter((p) => p.enabled).length,
     withSkills: all.filter((p) => p.hasSkill).length,
-    withTools: all.filter((p) => p.hasTools).length,
+    fromPlugins: all.filter((p) => p.source === "plugins").length,
+    fromLegacySkills: all.filter((p) => p.source === "skills").length,
     failed: all.filter((p) => !!p.loadError).length,
+    configIssues: all.filter((p) =>
+      Object.values(p.configStatus).some((v) => v.required && !v.present)
+    ).length,
   };
 }
 
-/**
- * Get all plugin SKILL.md contents (for context injection).
- */
-export function getPluginSkillContexts(): string {
-  const skills: string[] = [];
-
-  for (const plugin of installedPlugins.values()) {
-    if (!plugin.enabled || !plugin.hasSkill) continue;
-
-    const skillPath = path.join(plugin.path, "SKILL.md");
-    try {
-      if (fs.existsSync(skillPath)) {
-        const content = fs.readFileSync(skillPath, "utf-8");
-        // Strip frontmatter
-        const body = content.replace(/^---[\s\S]*?---\n*/, "").trim();
-        if (body) {
-          skills.push(`### Plugin: ${plugin.manifest.name}\n${body}`);
-        }
-      }
-    } catch { }
-  }
-
-  if (skills.length === 0) return "";
-  return `\n## Active Plugin Skills\n\n${skills.join("\n\n---\n\n")}\n`;
-}
-
 // ============================================
-// PERSISTENCE
+// FILE WATCHING (HOT RELOAD)
 // ============================================
 
-function saveRegistry(): void {
+function watchPluginsDir(): void {
+  if (fileWatcher) return;
+  if (!fs.existsSync(PLUGINS_DIR)) return;
+
   try {
-    ensurePluginsDir();
-    const data = Array.from(installedPlugins.entries()).map(([id, p]) => ({
-      id,
-      enabled: p.enabled,
-      installedAt: p.installedAt,
-    }));
-    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(data, null, 2), "utf-8");
-  } catch { }
+    let debounce: NodeJS.Timeout | null = null;
+
+    fileWatcher = fs.watch(PLUGINS_DIR, { recursive: true }, () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(async () => {
+        logger.info("plugin-registry", "Plugin directory changed, reloading...");
+        await loadAllPlugins();
+      }, 3000);
+    });
+
+    if (fileWatcher.unref) fileWatcher.unref();
+  } catch {
+    logger.warn("plugin-registry", "Failed to watch plugins directory");
+  }
 }
 
-function loadRegistry(): void {
+// ============================================
+// REGISTRY PERSISTENCE
+// ============================================
+
+function loadRegistryStates(): Record<string, boolean> {
   try {
     if (fs.existsSync(REGISTRY_FILE)) {
       const data = JSON.parse(fs.readFileSync(REGISTRY_FILE, "utf-8"));
+      const states: Record<string, boolean> = {};
       for (const entry of data) {
-        const existing = installedPlugins.get(entry.id);
-        if (existing) {
-          existing.enabled = entry.enabled;
-          existing.installedAt = entry.installedAt;
-        }
+        states[entry.id] = entry.enabled;
       }
+      return states;
     }
+  } catch { }
+  return {};
+}
+
+function saveRegistryStates(): void {
+  try {
+    ensureDirs();
+    const data = Array.from(plugins.entries()).map(([id, p]) => ({
+      id,
+      enabled: p.enabled,
+      source: p.source,
+    }));
+    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(data, null, 2), "utf-8");
   } catch { }
 }
 
@@ -533,16 +681,23 @@ function loadRegistry(): void {
 
 function copyDirSync(src: string, dest: string): void {
   fs.mkdirSync(dest, { recursive: true });
-  const entries = fs.readdirSync(src, { withFileTypes: true });
-
-  for (const entry of entries) {
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
-
     if (entry.isDirectory()) {
       copyDirSync(srcPath, destPath);
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
+  }
+}
+
+/**
+ * Stop file watcher. Call on shutdown.
+ */
+export function stopPluginWatcher(): void {
+  if (fileWatcher) {
+    fileWatcher.close();
+    fileWatcher = null;
   }
 }
