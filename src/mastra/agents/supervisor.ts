@@ -60,7 +60,8 @@ const memory = new Memory({
       : false,
 
     // Observational Memory — background agents compress old context
-    // Uses fast model for observer/reflector (background work)
+    // Observer watches conversations → creates dense observation log
+    // Reflector condenses observations when they grow too large
     observationalMemory: omModel
       ? { model: omModel as any }
       : false,
