@@ -38,5 +38,13 @@
     "outcome": "partial",
     "toolCount": 1,
     "durationMs": 22371
+  },
+  {
+    "timestamp": 1774707705177,
+    "task": "hy",
+    "quality": 8,
+    "outcome": "success",
+    "toolCount": 2,
+    "durationMs": 15653
   }
 ]
