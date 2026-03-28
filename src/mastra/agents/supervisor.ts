@@ -18,16 +18,27 @@ initWorkspace();
 // MASTRA MEMORY (proper, all features)
 // ============================================
 
-// Determine which memory features are available based on API keys
-const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
-const hasGoogleKey = !!process.env.GOOGLE_API_KEY;
-const hasOllamaCloud = !!process.env.LLM_API_KEY && process.env.LLM_BASE_URL;
+// ============================================
+// MEMORY — Multi-model configuration
+// ============================================
+// Ollama Cloud provides ALL models via OpenAI-compatible API:
+//   Main chat: qwen3-coder:480b (smart, coding)
+//   Observational Memory: gemini-2.5-flash:free (fast, cheap — perfect for background)
+//   Semantic Recall: uses embeddings (needs vector store)
+//
+// All models available on Ollama Cloud:
+//   gemini-2.5-flash:free, gpt-oss:120b, minimax-2.7,
+//   qwen3-coder:480b, kimi-k2.5:cloud, deepseek-r1:cloud
 
-// Pick OM model: Google > Ollama Cloud > disabled
-const omModel = hasGoogleKey
-  ? "google/gemini-2.5-flash"
-  : hasOllamaCloud
-  ? `custom/${process.env.LLM_MODEL || "qwen3-coder:480b"}`
+const hasLLMKey = !!process.env.LLM_API_KEY;
+const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+
+// Observational Memory model — use fast/cheap model for background work
+// gemini-2.5-flash:free is ideal (fast + free on Ollama Cloud)
+const omModel = hasLLMKey
+  ? getModelForAgent() // Uses same provider but can be overridden
+  : hasOpenAIKey
+  ? "openai/gpt-4o-mini"
   : null;
 
 const memory = new Memory({
@@ -36,32 +47,33 @@ const memory = new Memory({
     lastMessages: 20,
 
     // Working Memory — persistent scratchpad for user info
+    // Agent stores names, preferences, goals across conversations
     workingMemory: {
       enabled: true,
       scope: "resource",
     },
 
     // Semantic Recall — RAG search for relevant past messages
-    // Enabled when OpenAI key available (for embeddings)
-    semanticRecall: hasOpenAIKey
+    // Uses same provider for embeddings if available
+    semanticRecall: (hasLLMKey || hasOpenAIKey)
       ? { topK: 5, messageRange: 2 }
       : false,
 
     // Observational Memory — background agents compress old context
-    // Needs a separate LLM to observe + reflect
+    // Uses fast model for observer/reflector (background work)
     observationalMemory: omModel
-      ? { model: omModel }
+      ? { model: omModel as any }
       : false,
   },
 });
 
-const features = [
+const activeFeatures = [
   "history(20)",
   "workingMemory",
-  hasOpenAIKey ? "semanticRecall" : "semanticRecall(off-no-key)",
-  omModel ? `observationalMemory(${omModel})` : "observationalMemory(off-no-key)",
+  (hasLLMKey || hasOpenAIKey) ? "semanticRecall(on)" : "semanticRecall(off)",
+  omModel ? "observationalMemory(on)" : "observationalMemory(off)",
 ];
-logger.info("supervisor", `Memory: ${features.join(" + ")}`);
+logger.info("supervisor", `Memory: ${activeFeatures.join(" + ")}`);
 
 // Import ALL tools from all categories
 import { navigateTool, actTool, extractTool, screenshotTool, webSearchTool, browserAgentTool } from "../tools/browser";
