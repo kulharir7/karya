@@ -27,6 +27,8 @@ import { eventBus } from "@/lib/event-bus";
 import { getWorkspaceContext, initWorkspace, logToDaily } from "@/lib/memory-engine";
 import { getRelevantLessons, runSelfReview } from "@/lib/self-improving";
 import { getActivePluginSkills, matchPlugins, loadPluginSkill } from "@/lib/plugin-registry";
+// Import audit-log to auto-register event bus hooks (side effect import)
+import "@/lib/audit-log";
 
 // ============================================
 // TYPES
