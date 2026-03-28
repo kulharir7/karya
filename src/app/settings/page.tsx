@@ -61,10 +61,49 @@ const PROVIDER_MODELS: Record<LLMProvider, { id: string; name: string; descripti
     { id: "qwen2.5-coder:32b", name: "Qwen Coder", description: "💻 Code" },
   ],
   "ollama-cloud": [
-    { id: "qwen3-coder:480b", name: "Qwen 3 Coder 480B", description: "💻 Code (cloud)" },
-    { id: "gpt-oss:120b", name: "GPT-OSS 120B", description: "🧠 General (cloud)" },
-    { id: "kimi-k2.5:cloud", name: "Kimi K2.5", description: "⚡ Fast (cloud)" },
-    { id: "deepseek-r1:cloud", name: "DeepSeek R1", description: "🧠 Reasoning (cloud)" },
+    // Top Picks
+    { id: "gpt-oss:120b", name: "GPT-OSS 120B", description: "🧠 Best general" },
+    { id: "qwen3-coder:480b", name: "Qwen 3 Coder 480B", description: "💻 Best coding" },
+    { id: "qwen3-coder-next", name: "Qwen 3 Coder Next", description: "💻 Agentic coding" },
+    // MiniMax
+    { id: "minimax-m2.7", name: "MiniMax M2.7", description: "🚀 NEW! Coding & agentic" },
+    { id: "minimax-m2.5", name: "MiniMax M2.5", description: "⚡ Productivity" },
+    { id: "minimax-m2.1", name: "MiniMax M2.1", description: "💼 Workflows" },
+    { id: "minimax-m2", name: "MiniMax M2", description: "🔧 Efficient" },
+    // Qwen
+    { id: "qwen3.5:397b", name: "Qwen 3.5 397B", description: "🌟 Multimodal" },
+    { id: "qwen3-next:80b", name: "Qwen 3 Next 80B", description: "⚡ Efficient" },
+    { id: "qwen3-vl:235b", name: "Qwen 3 VL 235B", description: "👁️ Vision" },
+    // Kimi
+    { id: "kimi-k2.5", name: "Kimi K2.5", description: "🤖 1T Agentic" },
+    { id: "kimi-k2:1t", name: "Kimi K2 1T", description: "🌌 Massive" },
+    { id: "kimi-k2-thinking", name: "Kimi K2 Thinking", description: "🧠 Deep thinking" },
+    // DeepSeek
+    { id: "deepseek-v3.2", name: "DeepSeek V3.2", description: "🔬 Reasoning" },
+    { id: "deepseek-v3.1:671b", name: "DeepSeek V3.1 671B", description: "📊 671B" },
+    // GLM
+    { id: "glm-5", name: "GLM 5", description: "🧪 744B (40B active)" },
+    { id: "glm-4.7", name: "GLM 4.7", description: "💻 Coding" },
+    { id: "glm-4.6", name: "GLM 4.6", description: "🤖 Agentic" },
+    // NVIDIA Nemotron
+    { id: "nemotron-3-super", name: "Nemotron 3 Super", description: "🟢 120B MoE" },
+    { id: "nemotron-3-nano:30b", name: "Nemotron 3 Nano 30B", description: "⚡ Efficient" },
+    // Devstral
+    { id: "devstral-2:123b", name: "Devstral 2 123B", description: "👨‍💻 SE agents" },
+    { id: "devstral-small-2:24b", name: "Devstral Small 24B", description: "🔧 Compact" },
+    // Mistral
+    { id: "mistral-large-3:675b", name: "Mistral Large 3", description: "🌟 675B flagship" },
+    { id: "ministral-3:14b", name: "Ministral 3 14B", description: "📱 Edge" },
+    { id: "ministral-3:8b", name: "Ministral 3 8B", description: "⚡ Fast" },
+    { id: "ministral-3:3b", name: "Ministral 3 3B", description: "🐁 Tiny" },
+    // Others
+    { id: "cogito-2.1:671b", name: "Cogito 2.1 671B", description: "📜 MIT license" },
+    { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", description: "✨ Google preview" },
+    { id: "rnj-1:8b", name: "RNJ-1 8B", description: "🔬 Code & STEM" },
+    { id: "gemma3:27b", name: "Gemma 3 27B", description: "💎 Google open" },
+    { id: "gemma3:12b", name: "Gemma 3 12B", description: "💎 Balanced" },
+    { id: "gemma3:4b", name: "Gemma 3 4B", description: "💎 Compact" },
+    { id: "gpt-oss:20b", name: "GPT-OSS 20B", description: "🧠 Smaller" },
   ],
   custom: [],
 };

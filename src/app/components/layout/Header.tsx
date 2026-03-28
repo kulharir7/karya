@@ -73,10 +73,49 @@ const MODEL_GROUPS = [
     icon: "☁️",
     color: "from-violet-500 to-purple-600",
     models: [
-      { id: "qwen3-coder:480b", name: "Qwen 3 Coder", badge: "480B", badgeColor: "bg-orange-500", desc: "Best for coding", icon: "💻" },
-      { id: "gpt-oss:120b", name: "GPT-OSS", badge: "120B", badgeColor: "bg-teal-500", desc: "Open source GPT", icon: "🧠" },
-      { id: "kimi-k2.5:cloud", name: "Kimi K2.5", badge: "Fast", badgeColor: "bg-blue-500", desc: "Quick responses", icon: "⚡" },
-      { id: "deepseek-r1:cloud", name: "DeepSeek R1", badge: "Reason", badgeColor: "bg-purple-500", desc: "Deep reasoning", icon: "🔬" },
+      // Top Picks
+      { id: "gpt-oss:120b", name: "GPT-OSS 120B", badge: "Best", badgeColor: "bg-green-500", desc: "Open source GPT", icon: "🧠" },
+      { id: "qwen3-coder:480b", name: "Qwen 3 Coder 480B", badge: "Code", badgeColor: "bg-orange-500", desc: "Best for coding", icon: "💻" },
+      { id: "qwen3-coder-next", name: "Qwen 3 Coder Next", badge: "New", badgeColor: "bg-pink-500", desc: "Agentic coding", icon: "💻" },
+      // MiniMax Series
+      { id: "minimax-m2.7", name: "MiniMax M2.7", badge: "New", badgeColor: "bg-pink-500", desc: "Coding & agentic", icon: "🚀" },
+      { id: "minimax-m2.5", name: "MiniMax M2.5", desc: "Productivity & coding", icon: "⚡" },
+      { id: "minimax-m2.1", name: "MiniMax M2.1", desc: "Coding workflows", icon: "💼" },
+      { id: "minimax-m2", name: "MiniMax M2", desc: "Efficient coding", icon: "🔧" },
+      // Qwen Series
+      { id: "qwen3.5:397b", name: "Qwen 3.5 397B", badge: "397B", badgeColor: "bg-purple-500", desc: "Multimodal flagship", icon: "🌟" },
+      { id: "qwen3-next:80b", name: "Qwen 3 Next 80B", desc: "Efficient inference", icon: "⚡" },
+      { id: "qwen3-vl:235b", name: "Qwen 3 VL 235B", badge: "Vision", badgeColor: "bg-blue-500", desc: "Vision-language", icon: "👁️" },
+      // Kimi Series
+      { id: "kimi-k2.5", name: "Kimi K2.5", badge: "1T", badgeColor: "bg-red-500", desc: "Multimodal agentic", icon: "🤖" },
+      { id: "kimi-k2:1t", name: "Kimi K2 1T", desc: "Massive model", icon: "🌌" },
+      { id: "kimi-k2-thinking", name: "Kimi K2 Thinking", badge: "Think", badgeColor: "bg-indigo-500", desc: "Deep reasoning", icon: "🧠" },
+      // DeepSeek
+      { id: "deepseek-v3.2", name: "DeepSeek V3.2", badge: "Reason", badgeColor: "bg-purple-500", desc: "Reasoning & agent", icon: "🔬" },
+      { id: "deepseek-v3.1:671b", name: "DeepSeek V3.1 671B", desc: "Previous gen", icon: "📊" },
+      // GLM Series
+      { id: "glm-5", name: "GLM 5", badge: "744B", badgeColor: "bg-teal-500", desc: "40B active, reasoning", icon: "🧪" },
+      { id: "glm-4.7", name: "GLM 4.7", desc: "Coding focused", icon: "💻" },
+      { id: "glm-4.6", name: "GLM 4.6", desc: "Agentic & reasoning", icon: "🤖" },
+      // Nemotron (NVIDIA)
+      { id: "nemotron-3-super", name: "Nemotron 3 Super", badge: "120B", badgeColor: "bg-green-500", desc: "12B active, MoE", icon: "🟢" },
+      { id: "nemotron-3-nano:30b", name: "Nemotron 3 Nano 30B", desc: "Efficient agentic", icon: "⚡" },
+      // Devstral (Mistral Code)
+      { id: "devstral-2:123b", name: "Devstral 2 123B", badge: "Code", badgeColor: "bg-orange-500", desc: "SE agents", icon: "👨‍💻" },
+      { id: "devstral-small-2:24b", name: "Devstral Small 24B", desc: "Compact coding", icon: "🔧" },
+      // Mistral
+      { id: "mistral-large-3:675b", name: "Mistral Large 3", badge: "675B", badgeColor: "bg-yellow-500", desc: "Flagship model", icon: "🌟" },
+      { id: "ministral-3:14b", name: "Ministral 3 14B", desc: "Edge deployment", icon: "📱" },
+      { id: "ministral-3:8b", name: "Ministral 3 8B", badge: "Fast", badgeColor: "bg-blue-500", desc: "Ultra fast", icon: "⚡" },
+      { id: "ministral-3:3b", name: "Ministral 3 3B", desc: "Tiny & fast", icon: "🐁" },
+      // Others
+      { id: "cogito-2.1:671b", name: "Cogito 2.1 671B", badge: "MIT", badgeColor: "bg-gray-500", desc: "MIT license", icon: "📜" },
+      { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", badge: "Preview", badgeColor: "bg-blue-500", desc: "Google frontier", icon: "✨" },
+      { id: "rnj-1:8b", name: "RNJ-1 8B", desc: "Code & STEM", icon: "🔬" },
+      { id: "gemma3:27b", name: "Gemma 3 27B", desc: "Google open", icon: "💎" },
+      { id: "gemma3:12b", name: "Gemma 3 12B", desc: "Balanced", icon: "💎" },
+      { id: "gemma3:4b", name: "Gemma 3 4B", badge: "Fast", badgeColor: "bg-blue-500", desc: "Compact", icon: "💎" },
+      { id: "gpt-oss:20b", name: "GPT-OSS 20B", desc: "Smaller variant", icon: "🧠" },
     ]
   },
   {
