@@ -1,153 +1,178 @@
 /**
- * Karya Gateway — Unified Message Router
+ * Karya Bridge Gateway — Unified channel manager
  * 
- * Routes messages from any channel (Telegram, WhatsApp, Discord, Web)
- * to the same supervisor agent.
+ * Manages all external channel bridges (Telegram, WhatsApp, Discord).
+ * Each bridge routes messages through ChatProcessor.
  * 
- * Same agent, multiple input channels.
+ * Usage:
+ *   const gw = getGateway();
+ *   await gw.startBridge("telegram");  // Start Telegram bridge
+ *   gw.getStatus();                     // Get all bridge statuses
+ *   await gw.stopAll();                 // Stop everything
  */
 
-import type { ChannelBridge, IncomingMessage, OutgoingMessage, ChannelType, GatewayConfig } from "./types";
+import type { ChannelBridge, ChannelType, BridgeConfig, BridgeInfo } from "./types";
 import { eventBus } from "../lib/event-bus";
 import { logger } from "../lib/logger";
-import { createTelegramBridge } from "./telegram";
+import { createTelegramBridge, TelegramBridge } from "./telegram";
+
+// ============================================
+// GATEWAY CLASS
+// ============================================
 
 export class Gateway {
   private bridges: Map<ChannelType, ChannelBridge> = new Map();
-  private messageHandler: ((msg: IncomingMessage) => Promise<string>) | null = null;
   private running = false;
 
-  constructor() {
-    // Listen for messages from bridges
-    eventBus.on("bridge:message", this.handleMessage.bind(this));
-  }
-
   /**
-   * Set the message handler (agent)
+   * Start a specific bridge by type.
    */
-  setMessageHandler(handler: (msg: IncomingMessage) => Promise<string>): void {
-    this.messageHandler = handler;
-  }
-
-  /**
-   * Initialize all configured bridges
-   */
-  async init(config?: GatewayConfig): Promise<void> {
-    // Telegram
-    const telegramBridge = createTelegramBridge();
-    if (telegramBridge) {
-      try {
-        await telegramBridge.init();
-        this.bridges.set("telegram", telegramBridge);
-      } catch (err) {
-        logger.warn("gateway", "Telegram bridge failed to init");
-      }
+  async startBridge(type: ChannelType): Promise<BridgeInfo> {
+    // Check if already running
+    const existing = this.bridges.get(type);
+    if (existing?.isRunning()) {
+      return existing.getInfo();
     }
 
-    // WhatsApp (TODO: implement)
-    // const whatsappBridge = createWhatsAppBridge();
-    // if (whatsappBridge) { ... }
+    let bridge: ChannelBridge | null = null;
 
-    // Discord (TODO: implement)
-    // const discordBridge = createDiscordBridge();
-    // if (discordBridge) { ... }
+    switch (type) {
+      case "telegram":
+        bridge = createTelegramBridge();
+        break;
 
-    this.running = true;
-    logger.info("gateway", `Started with ${this.bridges.size} bridges`);
-  }
+      // Future channels:
+      // case "whatsapp":
+      //   bridge = createWhatsAppBridge();
+      //   break;
+      // case "discord":
+      //   bridge = createDiscordBridge();
+      //   break;
 
-  /**
-   * Handle incoming message from any channel
-   */
-  private async handleMessage(msg: IncomingMessage): Promise<void> {
-    if (!this.messageHandler) {
-      logger.warn("gateway", "No message handler set, ignoring message");
-      return;
+      default:
+        throw new Error(`Unknown bridge type: ${type}`);
     }
 
-    logger.info("gateway", `Message from ${msg.channel}/${msg.userId}: ${msg.text.slice(0, 50)}...`);
-
-    try {
-      // Process message through agent
-      const response = await this.messageHandler(msg);
-
-      // Send response back through same channel
-      if (response && response.trim()) {
-        await this.send({
-          channel: msg.channel,
-          chatId: msg.chatId,
-          text: response,
-          replyTo: msg.metadata?.messageId,
-          markdown: true,
-        });
-      }
-    } catch (err) {
-      logger.error("gateway", "Failed to process message", err);
-      
-      // Send error response
-      await this.send({
-        channel: msg.channel,
-        chatId: msg.chatId,
-        text: "Sorry, something went wrong. Please try again.",
-      });
-    }
-  }
-
-  /**
-   * Send message through a channel
-   */
-  async send(message: OutgoingMessage): Promise<void> {
-    const bridge = this.bridges.get(message.channel);
-    
     if (!bridge) {
-      logger.warn("gateway", `No bridge for channel: ${message.channel}`);
+      throw new Error(`Failed to create ${type} bridge. Check configuration/env vars.`);
+    }
+
+    await bridge.init();
+    this.bridges.set(type, bridge);
+    this.running = true;
+
+    logger.info("gateway", `Bridge started: ${type}`);
+    return bridge.getInfo();
+  }
+
+  /**
+   * Stop a specific bridge.
+   */
+  async stopBridge(type: ChannelType): Promise<void> {
+    const bridge = this.bridges.get(type);
+    if (!bridge) {
+      logger.warn("gateway", `No bridge found for: ${type}`);
       return;
     }
 
-    await bridge.send(message);
+    await bridge.stop();
+    this.bridges.delete(type);
+
+    if (this.bridges.size === 0) {
+      this.running = false;
+    }
+
+    logger.info("gateway", `Bridge stopped: ${type}`);
   }
 
   /**
-   * Broadcast to all channels for a user
+   * Initialize all configured bridges from env vars.
    */
-  async broadcast(userId: string, text: string): Promise<void> {
-    // TODO: Implement user-channel mapping
-    // For now, just log
-    logger.info("gateway", `Broadcast to ${userId}: ${text.slice(0, 50)}...`);
+  async initAll(): Promise<void> {
+    // Telegram
+    if (process.env.TELEGRAM_BOT_TOKEN) {
+      try {
+        await this.startBridge("telegram");
+      } catch (err: any) {
+        logger.warn("gateway", `Telegram bridge failed: ${err.message}`);
+      }
+    }
+
+    // Future: WhatsApp, Discord, etc.
+
+    logger.info("gateway", `Gateway initialized with ${this.bridges.size} bridges`);
   }
 
   /**
-   * Stop all bridges
+   * Stop all bridges.
    */
-  async stop(): Promise<void> {
+  async stopAll(): Promise<void> {
     for (const [type, bridge] of this.bridges) {
       try {
         await bridge.stop();
-        logger.info("gateway", `Stopped ${type} bridge`);
-      } catch (err) {
-        logger.error("gateway", `Failed to stop ${type} bridge`, err);
+        logger.info("gateway", `Stopped: ${type}`);
+      } catch (err: any) {
+        logger.error("gateway", `Failed to stop ${type}: ${err.message}`);
       }
     }
-    
+
     this.bridges.clear();
     this.running = false;
   }
 
   /**
-   * Get bridge status
+   * Get status of all bridges.
    */
-  getStatus(): Record<string, boolean> {
-    const status: Record<string, boolean> = {};
-    
-    for (const [type, bridge] of this.bridges) {
-      status[type] = bridge.isRunning();
+  getStatus(): BridgeInfo[] {
+    const statuses: BridgeInfo[] = [];
+    for (const bridge of this.bridges.values()) {
+      statuses.push(bridge.getInfo());
     }
-    
-    return status;
+    return statuses;
+  }
+
+  /**
+   * Get a specific bridge.
+   */
+  getBridge(type: ChannelType): ChannelBridge | null {
+    return this.bridges.get(type) || null;
+  }
+
+  /**
+   * Is any bridge running?
+   */
+  isRunning(): boolean {
+    return this.running;
+  }
+
+  /**
+   * List available bridge types (including unconfigured ones).
+   */
+  getAvailableBridges(): Array<{ type: ChannelType; configured: boolean; running: boolean }> {
+    return [
+      {
+        type: "telegram",
+        configured: !!process.env.TELEGRAM_BOT_TOKEN,
+        running: this.bridges.get("telegram")?.isRunning() || false,
+      },
+      {
+        type: "whatsapp",
+        configured: false, // TODO
+        running: false,
+      },
+      {
+        type: "discord",
+        configured: false, // TODO
+        running: false,
+      },
+    ];
   }
 }
 
-// Singleton instance
+// ============================================
+// SINGLETON
+// ============================================
+
 let gatewayInstance: Gateway | null = null;
 
 export function getGateway(): Gateway {
@@ -158,14 +183,10 @@ export function getGateway(): Gateway {
 }
 
 /**
- * Initialize gateway with agent handler
+ * Quick init: start all configured bridges.
  */
-export async function initGateway(
-  handler: (msg: IncomingMessage) => Promise<string>,
-  config?: GatewayConfig
-): Promise<Gateway> {
+export async function initGateway(): Promise<Gateway> {
   const gateway = getGateway();
-  gateway.setMessageHandler(handler);
-  await gateway.init(config);
+  await gateway.initAll();
   return gateway;
 }

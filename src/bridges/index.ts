@@ -1,14 +1,14 @@
 /**
  * Karya Bridges — Multi-Channel Interface
  * 
- * Connect Karya to:
- * - Telegram (Bot API)
+ * Available channels:
+ * - Telegram ✅ (grammy, long polling)
  * - WhatsApp (TODO)
  * - Discord (TODO)
  * 
- * All channels route to the same supervisor agent.
+ * All channels route through the same ChatProcessor.
  */
 
 export * from "./types";
-export * from "./gateway";
+export { Gateway, getGateway, initGateway } from "./gateway";
 export { TelegramBridge, createTelegramBridge } from "./telegram";
