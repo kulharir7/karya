@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { execSync } from "child_process";
+import { fullSecurityCheck } from "../../../lib/security-engine";
 
 export const dateTimeTool = createTool({
   id: "system-datetime",
@@ -93,6 +94,10 @@ export const killProcessTool = createTool({
     message: z.string(),
   }),
   execute: async ({ target }) => {
+    const check = fullSecurityCheck("kill-process", { command: `kill ${target}` });
+    if (!check.allowed) {
+      return { success: false, message: `🔒 BLOCKED: ${check.reason}` };
+    }
     try {
       const isNum = /^\d+$/.test(target);
       const cmd = isNum

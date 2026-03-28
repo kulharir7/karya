@@ -7,6 +7,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
+import { fullSecurityCheck } from "../../../lib/security-engine";
 
 // Workspace directory for file operations (not project root!)
 const WORKSPACE_DIR = path.join(process.cwd(), "workspace");
@@ -36,6 +37,10 @@ export const readFileTool = createTool({
   }),
   execute: async ({ filePath }) => {
     const resolved = resolveFilePath(filePath);
+    const check = fullSecurityCheck("file-read", { path: resolved, operation: "read" });
+    if (!check.allowed) {
+      return { success: false, content: `🔒 BLOCKED: ${check.reason}`, size: 0 };
+    }
     const content = fs.readFileSync(resolved, "utf-8");
     const stats = fs.statSync(resolved);
     return {
@@ -60,6 +65,10 @@ export const writeFileTool = createTool({
   }),
   execute: async ({ filePath, content }) => {
     const resolved = resolveFilePath(filePath);
+    const check = fullSecurityCheck("file-write", { path: resolved, operation: "write" });
+    if (!check.allowed) {
+      return { success: false, path: resolved, size: 0, error: `🔒 BLOCKED: ${check.reason}` };
+    }
     const dir = path.dirname(resolved);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -115,6 +124,14 @@ export const moveFileTool = createTool({
   execute: async ({ source, destination }) => {
     const src = resolveFilePath(source);
     const dest = resolveFilePath(destination);
+    const srcCheck = fullSecurityCheck("file-move", { path: src, operation: "read" });
+    if (!srcCheck.allowed) {
+      return { success: false, from: src, to: dest, error: `🔒 BLOCKED: ${srcCheck.reason}` };
+    }
+    const destCheck = fullSecurityCheck("file-move", { path: dest, operation: "write" });
+    if (!destCheck.allowed) {
+      return { success: false, from: src, to: dest, error: `🔒 BLOCKED: ${destCheck.reason}` };
+    }
     const destDir = path.dirname(dest);
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir, { recursive: true });

@@ -3,6 +3,7 @@ import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
 import { execSync } from "child_process";
+import { fullSecurityCheck } from "../../../lib/security-engine";
 
 // Workspace directory for file operations (not project root!)
 const WORKSPACE_DIR = path.join(process.cwd(), "workspace");
@@ -39,6 +40,10 @@ export const codeWriteTool = createTool({
   execute: async ({ filePath, code, language }) => {
     try {
       const resolved = resolveFilePath(filePath);
+      const check = fullSecurityCheck("code-write", { path: resolved, operation: "write" });
+      if (!check.allowed) {
+        return { success: false, path: resolved, lines: 0, size: `🔒 BLOCKED: ${check.reason}` };
+      }
       const dir = path.dirname(resolved);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(resolved, code, "utf-8");
@@ -72,6 +77,12 @@ export const codeExecuteTool = createTool({
     error: z.string(),
   }),
   execute: async ({ code, timeout }) => {
+    // Security check on the code content (treat as command)
+    const check = fullSecurityCheck("code-execute", { command: code });
+    if (!check.allowed) {
+      return { success: false, output: "", error: `🔒 BLOCKED: ${check.reason}` };
+    }
+
     try {
       // Write temp file and execute
       const tmpFile = path.join(process.cwd(), `.tmp-exec-${Date.now()}.js`);

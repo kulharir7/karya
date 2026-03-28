@@ -7,6 +7,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { execSync } from "child_process";
+import { fullSecurityCheck } from "../../../lib/security-engine";
 
 function runGit(args: string, cwd: string): { success: boolean; output: string } {
   try {
@@ -80,6 +81,10 @@ export const gitPushTool = createTool({
     output: z.string(),
   }),
   execute: async ({ path: repoPath, remote, branch }) => {
+    const check = fullSecurityCheck("git-push", { command: `git push ${remote || "origin"} ${branch || ""}` });
+    if (!check.allowed) {
+      return { success: false, output: `🔒 BLOCKED: ${check.reason}` };
+    }
     const r = remote || "origin";
     const b = branch || runGit("branch --show-current", repoPath).output || "main";
     return runGit(`push ${r} ${b}`, repoPath);
